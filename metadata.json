@@ -1,0 +1,6 @@
+{
+  "name": "QRaft",
+  "description": "Professional QR code generator, scanner, batch processor, and animated QR image transfer tool with bilingual English and Farsi support.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
