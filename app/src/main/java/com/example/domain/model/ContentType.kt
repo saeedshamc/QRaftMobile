@@ -9,7 +9,12 @@ enum class ContentType(val id: String) {
     WIFI("wifi"),
     VCARD("vcard"),
     LOCATION("location"),
-    CALENDAR("calendar")
+    CALENDAR("calendar"),
+    WHATSAPP("whatsapp"),
+    TELEGRAM("telegram"),
+    INSTAGRAM("instagram"),
+    CRYPTO("crypto"),
+    PAYPAL("paypal")
 }
 
 data class UrlContent(val url: String = "https://example.com")
@@ -43,6 +48,39 @@ data class CalendarContent(
     val location: String = "Design Room & Video Call",
     val description: String = "Quarterly planning and kickoff"
 )
+data class WhatsAppContent(
+    val phoneNumber: String = "+1234567890",
+    val message: String = "Hi! I found your QR code on QRaft."
+)
+data class TelegramContent(
+    val username: String = "username"
+)
+data class InstagramContent(
+    val username: String = "instagram_user"
+)
+enum class CryptoCoin(val code: String, val title: String) {
+    BTC("BTC", "Bitcoin"),
+    ETH("ETH", "Ethereum"),
+    USDT("USDT", "Tether (USDT)"),
+    BNB("BNB", "BNB"),
+    SOL("SOL", "Solana"),
+    TRX("TRX", "TRON (TRX)"),
+    DOGE("DOGE", "Dogecoin"),
+    LTC("LTC", "Litecoin"),
+    TON("TON", "Toncoin"),
+    XRP("XRP", "Ripple (XRP)")
+}
+
+data class CryptoContent(
+    val coin: CryptoCoin = CryptoCoin.BTC,
+    val address: String = "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa",
+    val amount: String = ""
+)
+data class PayPalContent(
+    val username: String = "mybusiness",
+    val amount: String = "10.00",
+    val currency: String = "USD"
+)
 
 object ContentEncoder {
     fun encode(
@@ -55,7 +93,12 @@ object ContentEncoder {
         wifi: WifiContent,
         vcard: VCardContent,
         location: LocationContent,
-        calendar: CalendarContent
+        calendar: CalendarContent,
+        whatsapp: WhatsAppContent = WhatsAppContent(),
+        telegram: TelegramContent = TelegramContent(),
+        instagram: InstagramContent = InstagramContent(),
+        crypto: CryptoContent = CryptoContent(),
+        paypal: PayPalContent = PayPalContent()
     ): String {
         return when (type) {
             ContentType.URL -> {
@@ -115,6 +158,44 @@ object ContentEncoder {
                     if (calendar.description.isNotBlank()) appendLine("DESCRIPTION:${calendar.description}")
                     appendLine("END:VEVENT")
                     append("END:VCALENDAR")
+                }
+            }
+            ContentType.WHATSAPP -> {
+                val cleanPhone = whatsapp.phoneNumber.filter { it.isDigit() || it == '+' }
+                val encText = java.net.URLEncoder.encode(whatsapp.message, "UTF-8").replace("+", "%20")
+                if (encText.isNotBlank()) {
+                    "https://wa.me/$cleanPhone?text=$encText"
+                } else {
+                    "https://wa.me/$cleanPhone"
+                }
+            }
+            ContentType.TELEGRAM -> {
+                val cleanUser = telegram.username.trim().removePrefix("@").removePrefix("https://t.me/")
+                "https://t.me/$cleanUser"
+            }
+            ContentType.INSTAGRAM -> {
+                val cleanUser = instagram.username.trim().removePrefix("@").removePrefix("https://instagram.com/").removePrefix("https://www.instagram.com/")
+                "https://instagram.com/$cleanUser"
+            }
+            ContentType.CRYPTO -> {
+                val coin = crypto.coin.code
+                val addr = crypto.address.trim()
+                val amt = crypto.amount.trim()
+                when (crypto.coin) {
+                    CryptoCoin.BTC -> if (amt.isNotBlank()) "bitcoin:$addr?amount=$amt" else "bitcoin:$addr"
+                    CryptoCoin.ETH -> if (amt.isNotBlank()) "ethereum:$addr?value=$amt" else "ethereum:$addr"
+                    CryptoCoin.LTC -> if (amt.isNotBlank()) "litecoin:$addr?amount=$amt" else "litecoin:$addr"
+                    CryptoCoin.DOGE -> if (amt.isNotBlank()) "dogecoin:$addr?amount=$amt" else "dogecoin:$addr"
+                    CryptoCoin.SOL -> if (amt.isNotBlank()) "solana:$addr?amount=$amt" else "solana:$addr"
+                    else -> "$coin:$addr"
+                }
+            }
+            ContentType.PAYPAL -> {
+                val cleanUser = paypal.username.trim().removePrefix("https://paypal.me/")
+                if (paypal.amount.isNotBlank()) {
+                    "https://paypal.me/$cleanUser/${paypal.amount.trim()}${paypal.currency.uppercase()}"
+                } else {
+                    "https://paypal.me/$cleanUser"
                 }
             }
         }

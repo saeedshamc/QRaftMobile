@@ -1,87 +1,91 @@
-# QRaft — Pro QR Studio & Animated Air-Gapped Transfer
+# QRaft (کیورفت) — Pro QR Studio & Animated Air-Gapped Transfer
 
 <p align="center">
-  <img src="app/src/main/assets/qraft_logo.svg" alt="QRaft Logo" width="160" height="160" />
-</p>
-
-<p align="center">
-  <b>A modern, offline-first Android application built with Jetpack Compose & Material Design 3.</b><br/>
-  Features high-precision QR generation, multi-format vector/PDF export, fast live scanning, batch CSV generator, and high-speed animated QR optical data transfer protocol.
+  <b>یک اپلیکیشن حرفه‌ای و مدرن اندروید برای تولید، اسکن، پردازش دسته‌ای و انتقال داده از طریق QR متحرک</b><br/>
+  <b>A modern, offline-first Android application built with Jetpack Compose & Material Design 3.</b>
 </p>
 
 ---
 
-## ✨ Features
+## ✨ Features & Capabilities (امکانات و قابلیت‌ها)
 
-### 🎨 1. QR Studio & Advanced Customization
-- **9 Content Types**: URL, Plain Text, Contact (vCard 3.0), Wi-Fi (SSID, Password, WPA/WEP/None, Hidden), Email, Phone, SMS, Geo Location, and Calendar Event.
-- **Deep Styling Matrix**:
-  - 8 Handcrafted Color Palettes (Cyber Indigo, Emerald Mint, Sunset Crimson, Midnight Gold, Forest Pine, Neon Violet, Ocean Deep, Monochrome Slate).
-  - Gradient Overlays (Linear & Radial), Transparent Backgrounds, and Custom Color Pickers.
-  - Dot & Finder Eye Geometries (Sharp Squares, Soft Rounded, Modern Dots).
-  - Error Correction Level selection (L ~7%, M ~15%, Q ~25%, H ~30%) with quiet zone control.
-  - Center Logo embedding with auto-scaling, badge padding, and official **QRaft SVG Vector Logo**.
-  - Frame templates (Scan Me banners, Top/Bottom headers) and custom watermarks.
-- **Multi-Format Vector & Document Exporter**:
-  - High-res PNG rendering.
-  - Clean, standalone SVG vector export with zero quality loss.
-  - Printable single-page PDF document generator with metadata header and notes.
-  - Native Android Share Intent.
+### 🎨 1. QR Studio & Advanced Customization (استودیو ساخت QR)
+- **14 Content Types (انواع محتوا)**:
+  - 🌐 **URL / وب‌سایت**: لینک مستقیم همراه با پیشوند خودکار
+  - 📝 **Plain Text / متن ساده**: با پشتیبانی کامل از کاراکترهای یونیکد و فارسی
+  - 👤 **vCard / مخاطب**: نام، نام خانوادگی، شماره همراه، ایمیل، شرکت و آدرس
+  - 📶 **Wi-Fi / وای‌فای**: نام شبکه (SSID)، رمز عبور، نوع رمزگذاری (WPA/WPA2, WEP, Open) و شبکه‌های مخفی (Hidden)
+  - ✉️ **Email / ایمیل**: گیرنده، موضوع و متن پیام
+  - 📞 **Phone / تماس**: شماره‌گیری مستقیم
+  - 💬 **SMS / پیامک**: شماره تماس و متن پیام پیش‌فرض
+  - 📍 **Location / موقعیت مکانی**: مختصات جغرافیایی (Latitude/Longitude) یا نام مکان/آدرس
+  - 📅 **Calendar Event / رویداد تقویم**: عنوان، توضیحات، موقعیت، زمان شروع و پایان با فرمت استاندارد iCalendar
+  - 🟢 **WhatsApp / واتساپ**: ارسال مستقیم پیام به شماره همراه
+  - ✈️ **Telegram / تلگرام**: لینک مستقیم به نام کاربری (Username)
+  - 📸 **Instagram / اینستاگرام**: لینک مستقیم به پروفایل اینستاگرام
+  - 💰 **Cryptocurrency / ارز دیجیتال**: پشتیبانی از Bitcoin (BTC), Ethereum (ETH), Tether (USDT), BNB, Solana (SOL), Dogecoin (DOGE) با قابلیت ثبت آدرس، مبلغ و پیام
+  - 💳 **PayPal / پی‌پال**: پرداخت مستقیم با نام کاربری یا لینک اختصاصی
+- **Deep Styling Matrix (شخصی‌سازی ظاهری پیشرفته)**:
+  - 8 پالت رنگی حرفه‌ای (Cyber Indigo, Emerald Mint, Sunset Crimson, Midnight Gold, Forest Pine, Neon Violet, Ocean Deep, Monochrome Slate)
+  - پشتیبانی از گرادیانت (افقی، عمودی، مورب)، پس‌زمینه شفاف (Transparent)، و رنگ‌های اختصاصی
+  - انواع اشکال نقطه‌ای (Square, Rounded, Dots) و فریم‌های گوشه (Eye Frames & Inners)
+  - ۴ سطح تصحیح خطا (L ~7%, M ~15%, Q ~25%, H ~30%)
+  - تعبیه لوگو در مرکز بارکد با تنظیم ابعاد و حاشیه
+  - واترمارک و برچسب‌های راهنما (مانند SCAN ME)
+- **Multi-Format Vector & Document Exporter (خروجی در فرمت‌های متنوع)**:
+  - خروجی باکیفیت **PNG** با رزولوشن انتخابی (تا 4096px)
+  - خروجی وکتور خالص **SVG** بدون افت کیفیت
+  - تولید سند چاپی رسمی **PDF** حاوی بارکد و توضیحات
+  - اشتراک‌گذاری مستقیم از طریق Android Share Sheet
 
-### 📷 2. Real-Time Camera Scanner
-- **CameraX + ZXing Pipeline**: Low-latency continuous scanner with responsive focus.
-- **Hardware Flashlight Toggle**: Instant torch switch for low-light environments.
-- **Contextual Action Sheet**: 1-tap browser launch for URLs, Wi-Fi auto-connect / credentials view, clipboard copy, and direct "Edit in Studio" handoff.
+### 📷 2. Real-Time Camera Scanner (اسکنر دوربین لحظه‌ای)
+- سرعت اسکن فوق‌العاده با تلفیق **CameraX** و **ZXing Core**
+- دکمه فعال‌سازی فلاش دوربین (Torch) برای محیط‌های کم‌نور
+- کارت هوشمند بعد از اسکن: باز کردن لینک در مرورگر، کپی در کلیپ‌بورد، و انتقال مستقیم به صفحه ویرایش (Edit in Studio)
 
-### ⚡ 3. Batch CSV Generator & ZIP Archiver
-- **Bulk QR Generation**: Generate dozens or hundreds of QR codes in seconds.
-- **Integrated CSV Editor & File Picker**: Pre-loaded with ready-to-use sample templates.
-- **Live Progress & Validation**: Real-time per-item syntax validation.
-- **ZIP Bundler**: Package all generated codes into a single `.zip` archive or save to local history.
+### ⚡ 3. Batch CSV Generator & ZIP Archiver (تولید دسته‌ای QR)
+- ساخت ده‌ها یا صدها کد QR به صورت همزمان از طریق فایل CSV یا متن ورودی
+- اعتبارسنجی زنده ردیف‌های ورودی (Valid/Invalid Rows)
+- تولید و دانلود فایل فشرده **ZIP** حاوی تمام کدهای تولید شده به همراه نام‌گذاری مرتب
+- ذخیره سابقه پردازش‌های دسته‌ای در دیتابیس محلی
 
-### 🎞️ 4. Animated QR Air-Gapped Data Transfer (Q1 Protocol)
-- **Optical Data Diode**: Transfer photos and binary files across air-gapped devices without Wi-Fi, Bluetooth, or Internet.
-- **Q1 Protocol Engine**: Automated image downsampling, JPEG/WebP compression, Base64 chunking, and dual-layer CRC32 checksums (`CHUNK_CRC32` & `FULL_SESSION_CRC32`).
-- **Interactive Player**: Frame scrubber, play/pause, adjustable FPS (1–15 FPS), and loop controls.
-- **Export Formats**: Export transfers as animated GIF or zipped frame sets.
-- **Decoder & Reconstructor**: Continuous camera stream analyzer and GIF frame importer with real-time reception tracker, error detection, and instant image restoration.
+### 🎞️ 4. Animated QR Optical Air-Gapped Transfer (انتقال داده با QR متحرک)
+- انتقال امن تصاویر و داده‌ها بین دو دستگاه بدون نیاز به اینترنت، وای‌فای یا بلوتوث (Air-Gapped Optical Diode)
+- پروتکل اختصاصی قطعه‌بندی با فشرده‌سازی خودکار و اعتبارسنجی دوبل **CRC32**
+- پخش‌کننده روان با کنترل سرعت فریم (FPS)، مکث/پخش و اسلایدر جابجایی بین فریم‌ها
+- خروجی به صورت فایل متحرک **GIF** یا آرشیو زیپ فریم‌ها
+- دریافت و بازسازی تصویر از طریق دوربین یا بارگذاری فایل GIF
 
-### 🔒 5. Privacy & Offline Architecture
-- **100% Offline-First**: Zero server dependencies; no tracking or external telemetry.
-- **Room Database**: Complete local history, custom notes, and reusable design preset manager.
-- **Private Analytics Dashboard**: Visual distribution charts for content types and scannability insights.
-- **Bilingual & RTL**: Full English & Persian (فارسی) localization with dynamic layout mirroring.
+### 🔒 5. Privacy, Local Storage & Multi-Language (امنیت و حریم خصوصی)
+- **100% آفلاین**: بدون نیاز به اینترنت و بدون ارسال کوچکترین داده به سرورهای خارجی
+- **پایگاه داده داخلی Room**: ذخیره تاریخچه، کدهای نشان‌شده، یادداشت‌های اختصاصی و قالب‌های طراحی (Presets)
+- **داشبورد آمار تحلیلی محلی**: نمودارهای تفکیک انواع بارکدهای تولید شده
+- **دو زبانه و پشتیبانی کامل از فارسی و راست‌چین (RTL & LTR)**
+- **پشتیبانی از حالت تاریک و روشن (Dark / Light / System Mode)**
 
 ---
 
-## 🛠️ Architecture & Tech Stack
+## 🛠️ Architecture & Technologies (معماری و فناوری‌ها)
 
-- **UI Framework**: [Jetpack Compose](https://developer.android.com/jetpack/compose) with Material Design 3 (M3).
-- **Language**: [Kotlin](https://kotlinlang.org/) (Coroutines, Flow, StateFlow).
-- **Architecture**: MVVM + Clean Architecture with Single Activity pattern.
-- **Camera & Scanning**: CameraX (`androidx.camera`) + ZXing Core.
-- **Persistence**: Room Database (`androidx.room`) with Kotlin Symbol Processing (KSP).
-- **PDF & Vector Engines**: Android `PdfDocument`, custom Canvas vector drawables, and native SVG generator.
-- **Image Processing**: Android Bitmap Matrix transformation and animated GIF encoding/decoding.
+- **UI & Design**: [Jetpack Compose](https://developer.android.com/jetpack/compose) with Material Design 3 (M3)
+- **Language**: Kotlin 2.x, Coroutines & Kotlin StateFlow
+- **Architecture Pattern**: MVVM + Clean Architecture with Repository Pattern
+- **Local Database**: AndroidX Room with SQLite
+- **Camera & Scanning**: CameraX + ZXing Core
+- **Export Engines**: Android `PdfDocument`, XML Vector Drawables, Native SVG Generator
+- **Storage**: Android FileProvider for secure intent sharing
 
 ---
 
-## 🚀 Getting Started
+## 🚀 How to Build & Run (نحوه اجرا و کامپایل)
 
-### Prerequisites
-- Android Studio Ladybug | 2024.2.1 or newer
-- JDK 17 or higher
-- Android SDK Platform 34 (Android 14)
-- Minimum SDK: API 26 (Android 8.0 Oreo)
-
-### Building & Running
-1. Clone this repository:
+1. Clone the repository:
    ```bash
    git clone https://github.com/your-username/qraft-android.git
    ```
-2. Open the project in **Android Studio**.
-3. Let Gradle sync dependencies.
-4. Run the project on an emulator or physical device via Android Studio or command line:
+2. Open the project in **Android Studio Ladybug (or newer)**.
+3. Sync Gradle dependencies.
+4. Run the project:
    ```bash
    ./gradlew :app:assembleDebug
    ```
@@ -89,4 +93,5 @@
 ---
 
 ## 📄 License
-QRaft is released under the **MIT License**.
+
+This project is licensed under the **MIT License**.

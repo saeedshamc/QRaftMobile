@@ -1,9 +1,31 @@
 package com.example.domain.model
 
-enum class DotStyle {
-    SQUARE,
-    ROUNDED,
-    DOTS
+enum class DotStyle(val label: String) {
+    SQUARE("Square"),
+    ROUNDED("Rounded"),
+    DOTS("Dots"),
+    CLASSY("Classy Diamond")
+}
+
+enum class EyeFrameStyle(val label: String) {
+    SQUARE("Square"),
+    ROUNDED("Rounded"),
+    CIRCLE("Circle"),
+    LEAF("Leaf")
+}
+
+enum class EyeInnerStyle(val label: String) {
+    SQUARE("Square"),
+    ROUNDED("Rounded"),
+    DOT("Dot"),
+    DIAMOND("Diamond")
+}
+
+enum class GradientType(val label: String) {
+    DIAGONAL("Diagonal 45°"),
+    HORIZONTAL("Horizontal"),
+    VERTICAL("Vertical"),
+    RADIAL("Radial Glow")
 }
 
 enum class ErrorCorrection(val level: String, val label: String, val tolerance: String) {
@@ -41,14 +63,18 @@ data class QRStyle(
     val fgColor: Long = 0xFF000000,
     val gradientMode: Boolean = false,
     val gradientEndColor: Long = 0xFF1A1A1A,
+    val gradientType: GradientType = GradientType.DIAGONAL,
     val bgColor: Long = 0xFFFFFFFF,
     val transparentBg: Boolean = false,
     val margin: Int = 2,
     val dotStyle: DotStyle = DotStyle.SQUARE,
+    val eyeFrameStyle: EyeFrameStyle = EyeFrameStyle.SQUARE,
+    val eyeInnerStyle: EyeInnerStyle = EyeInnerStyle.SQUARE,
     val logoUri: String? = null,
     val logoSizePercent: Int = 20, // 10..35%
     val frameLabel: String = "None", // None, "Scan Me", "Website", "Visit Website", "Add Contact"
     val watermarkText: String = "",
     val watermarkOpacity: Float = 0.5f,
-    val activePaletteId: String? = "classic"
+    val activePaletteId: String? = "classic",
+    val exportResolution: Int = 1024 // 512, 1024, 2048, 4096
 )

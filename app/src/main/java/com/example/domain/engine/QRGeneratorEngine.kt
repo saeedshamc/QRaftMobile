@@ -7,15 +7,20 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.LinearGradient
 import android.graphics.Paint
-import android.graphics.PorterDuff
-import android.graphics.PorterDuffXfermode
+import android.graphics.Path
+import android.graphics.RadialGradient
 import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Shader
 import android.graphics.Typeface
 import android.net.Uri
+import androidx.core.content.ContextCompat
+import com.example.R
 import com.example.domain.model.DotStyle
 import com.example.domain.model.ErrorCorrection
+import com.example.domain.model.EyeFrameStyle
+import com.example.domain.model.EyeInnerStyle
+import com.example.domain.model.GradientType
 import com.example.domain.model.QRStyle
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
@@ -50,9 +55,8 @@ object QRGeneratorEngine {
 
             val matrixWidth = bitMatrix.width
             val matrixHeight = bitMatrix.height
-            val outputSize = (forcedSize ?: style.sizePx).coerceIn(150, 2000)
+            val outputSize = (forcedSize ?: style.sizePx).coerceIn(150, 4096)
 
-            // Determine if frame is present
             val hasFrame = style.frameLabel != "None" && style.frameLabel.isNotBlank()
             val frameExtraHeight = if (hasFrame) (outputSize * 0.18f).toInt() else 0
             val totalBitmapHeight = outputSize + frameExtraHeight
@@ -73,17 +77,40 @@ object QRGeneratorEngine {
             val qrAreaTop = if (hasFrame && isTopBanner(style.frameLabel)) frameExtraHeight.toFloat() else 0f
             val qrAreaRect = RectF(0f, qrAreaTop, outputSize.toFloat(), qrAreaTop + outputSize)
 
-            // Foreground Paint (Color or Linear Gradient)
+            // Foreground Paint (Color or Gradient)
             val fgPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 this.style = Paint.Style.FILL
                 if (style.gradientMode) {
-                    shader = LinearGradient(
-                        0f, qrAreaTop,
-                        outputSize.toFloat(), qrAreaTop + outputSize,
-                        style.fgColor.toInt(),
-                        style.gradientEndColor.toInt(),
-                        Shader.TileMode.CLAMP
-                    )
+                    shader = when (style.gradientType) {
+                        GradientType.HORIZONTAL -> LinearGradient(
+                            0f, qrAreaTop,
+                            outputSize.toFloat(), qrAreaTop,
+                            style.fgColor.toInt(),
+                            style.gradientEndColor.toInt(),
+                            Shader.TileMode.CLAMP
+                        )
+                        GradientType.VERTICAL -> LinearGradient(
+                            0f, qrAreaTop,
+                            0f, qrAreaTop + outputSize,
+                            style.fgColor.toInt(),
+                            style.gradientEndColor.toInt(),
+                            Shader.TileMode.CLAMP
+                        )
+                        GradientType.RADIAL -> RadialGradient(
+                            outputSize / 2f, qrAreaTop + outputSize / 2f,
+                            outputSize / 1.4f,
+                            style.fgColor.toInt(),
+                            style.gradientEndColor.toInt(),
+                            Shader.TileMode.CLAMP
+                        )
+                        GradientType.DIAGONAL -> LinearGradient(
+                            0f, qrAreaTop,
+                            outputSize.toFloat(), qrAreaTop + outputSize,
+                            style.fgColor.toInt(),
+                            style.gradientEndColor.toInt(),
+                            Shader.TileMode.CLAMP
+                        )
+                    }
                 } else {
                     color = style.fgColor.toInt()
                 }
@@ -92,9 +119,21 @@ object QRGeneratorEngine {
             val moduleSizeX = outputSize.toFloat() / matrixWidth
             val moduleSizeY = outputSize.toFloat() / matrixHeight
 
-            // Draw Modules
+            // Track eye regions (7x7 modules each)
+            // Top-left: (margin .. margin+6, margin .. margin+6)
+            // Top-right: (matrixWidth - margin - 7 .. matrixWidth - margin - 1, margin .. margin+6)
+            // Bottom-left: (margin .. margin+6, matrixHeight - margin - 7 .. matrixHeight - margin - 1)
+            val m = style.margin
+            val tlEye = Rect(m, m, m + 7, m + 7)
+            val trEye = Rect(matrixWidth - m - 7, m, matrixWidth - m, m + 7)
+            val blEye = Rect(m, matrixHeight - m - 7, m + 7, matrixHeight - m)
+
+            // Draw Data Modules (skipping finder eyes)
             for (y in 0 until matrixHeight) {
                 for (x in 0 until matrixWidth) {
+                    val inEye = isInside(x, y, tlEye) || isInside(x, y, trEye) || isInside(x, y, blEye)
+                    if (inEye) continue
+
                     if (bitMatrix.get(x, y)) {
                         val left = x * moduleSizeX
                         val top = qrAreaTop + (y * moduleSizeY)
@@ -106,19 +145,36 @@ object QRGeneratorEngine {
                                 canvas.drawRect(left, top, right, bottom, fgPaint)
                             }
                             DotStyle.ROUNDED -> {
-                                val radius = moduleSizeX * 0.35f
+                                val radius = moduleSizeX * 0.38f
                                 canvas.drawRoundRect(left, top, right, bottom, radius, radius, fgPaint)
                             }
                             DotStyle.DOTS -> {
                                 val cx = left + moduleSizeX / 2f
                                 val cy = top + moduleSizeY / 2f
-                                val radius = (moduleSizeX.coerceAtMost(moduleSizeY) / 2f) * 0.9f
+                                val radius = (moduleSizeX.coerceAtMost(moduleSizeY) / 2f) * 0.92f
                                 canvas.drawCircle(cx, cy, radius, fgPaint)
+                            }
+                            DotStyle.CLASSY -> {
+                                val cx = left + moduleSizeX / 2f
+                                val cy = top + moduleSizeY / 2f
+                                val path = Path().apply {
+                                    moveTo(cx, top + 1f)
+                                    lineTo(right - 1f, cy)
+                                    lineTo(cx, bottom - 1f)
+                                    lineTo(left + 1f, cy)
+                                    close()
+                                }
+                                canvas.drawPath(path, fgPaint)
                             }
                         }
                     }
                 }
             }
+
+            // Draw Custom Finder Eyes (Top-Left, Top-Right, Bottom-Left)
+            drawFinderEye(canvas, tlEye, moduleSizeX, moduleSizeY, qrAreaTop, style.eyeFrameStyle, style.eyeInnerStyle, fgPaint, bgPaint, 0)
+            drawFinderEye(canvas, trEye, moduleSizeX, moduleSizeY, qrAreaTop, style.eyeFrameStyle, style.eyeInnerStyle, fgPaint, bgPaint, 1)
+            drawFinderEye(canvas, blEye, moduleSizeX, moduleSizeY, qrAreaTop, style.eyeFrameStyle, style.eyeInnerStyle, fgPaint, bgPaint, 2)
 
             // Center Logo Overlay
             if (!style.logoUri.isNullOrBlank() && context != null) {
@@ -142,6 +198,117 @@ object QRGeneratorEngine {
         }
     }
 
+    private fun isInside(x: Int, y: Int, r: Rect): Boolean {
+        return x >= r.left && x < r.right && y >= r.top && y < r.bottom
+    }
+
+    private fun drawFinderEye(
+        canvas: Canvas,
+        eyeGridRect: Rect,
+        modX: Float,
+        modY: Float,
+        qrAreaTop: Float,
+        frameStyle: EyeFrameStyle,
+        innerStyle: EyeInnerStyle,
+        fgPaint: Paint,
+        bgPaint: Paint,
+        cornerIndex: Int // 0=TL, 1=TR, 2=BL
+    ) {
+        val outerLeft = eyeGridRect.left * modX
+        val outerTop = qrAreaTop + (eyeGridRect.top * modY)
+        val outerRight = outerLeft + (7 * modX)
+        val outerBottom = outerTop + (7 * modY)
+        val outerRect = RectF(outerLeft, outerTop, outerRight, outerBottom)
+
+        val innerSpaceLeft = outerLeft + modX
+        val innerSpaceTop = outerTop + modY
+        val innerSpaceRight = outerRight - modX
+        val innerSpaceBottom = outerBottom - modY
+        val innerSpaceRect = RectF(innerSpaceLeft, innerSpaceTop, innerSpaceRight, innerSpaceBottom)
+
+        val centerLeft = outerLeft + (2 * modX)
+        val centerTop = outerTop + (2 * modY)
+        val centerRight = outerRight - (2 * modX)
+        val centerBottom = outerBottom - (2 * modY)
+        val centerRect = RectF(centerLeft, centerTop, centerRight, centerBottom)
+
+        // 1. Draw Outer 7x7 Shape
+        when (frameStyle) {
+            EyeFrameStyle.SQUARE -> {
+                canvas.drawRect(outerRect, fgPaint)
+            }
+            EyeFrameStyle.ROUNDED -> {
+                val r = 2.2f * modX
+                canvas.drawRoundRect(outerRect, r, r, fgPaint)
+            }
+            EyeFrameStyle.CIRCLE -> {
+                canvas.drawOval(outerRect, fgPaint)
+            }
+            EyeFrameStyle.LEAF -> {
+                val path = Path()
+                val r = 3.5f * modX
+                val radii = when (cornerIndex) {
+                    0 -> floatArrayOf(r, r, 0f, 0f, 0f, 0f, 0f, 0f) // TL rounded
+                    1 -> floatArrayOf(0f, 0f, r, r, 0f, 0f, 0f, 0f) // TR rounded
+                    else -> floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, r, r) // BL rounded
+                }
+                path.addRoundRect(outerRect, radii, Path.Direction.CW)
+                canvas.drawPath(path, fgPaint)
+            }
+        }
+
+        // 2. Clear 5x5 Inner Background Space
+        when (frameStyle) {
+            EyeFrameStyle.SQUARE -> {
+                canvas.drawRect(innerSpaceRect, bgPaint)
+            }
+            EyeFrameStyle.ROUNDED -> {
+                val r = 1.6f * modX
+                canvas.drawRoundRect(innerSpaceRect, r, r, bgPaint)
+            }
+            EyeFrameStyle.CIRCLE -> {
+                canvas.drawOval(innerSpaceRect, bgPaint)
+            }
+            EyeFrameStyle.LEAF -> {
+                val path = Path()
+                val r = 2.5f * modX
+                val radii = when (cornerIndex) {
+                    0 -> floatArrayOf(r, r, 0f, 0f, 0f, 0f, 0f, 0f)
+                    1 -> floatArrayOf(0f, 0f, r, r, 0f, 0f, 0f, 0f)
+                    else -> floatArrayOf(0f, 0f, 0f, 0f, 0f, 0f, r, r)
+                }
+                path.addRoundRect(innerSpaceRect, radii, Path.Direction.CW)
+                canvas.drawPath(path, bgPaint)
+            }
+        }
+
+        // 3. Draw 3x3 Center Dot
+        when (innerStyle) {
+            EyeInnerStyle.SQUARE -> {
+                canvas.drawRect(centerRect, fgPaint)
+            }
+            EyeInnerStyle.ROUNDED -> {
+                val r = 1.0f * modX
+                canvas.drawRoundRect(centerRect, r, r, fgPaint)
+            }
+            EyeInnerStyle.DOT -> {
+                canvas.drawOval(centerRect, fgPaint)
+            }
+            EyeInnerStyle.DIAMOND -> {
+                val cx = centerRect.centerX()
+                val cy = centerRect.centerY()
+                val path = Path().apply {
+                    moveTo(cx, centerRect.top)
+                    lineTo(centerRect.right, cy)
+                    lineTo(cx, centerRect.bottom)
+                    lineTo(centerRect.left, cy)
+                    close()
+                }
+                canvas.drawPath(path, fgPaint)
+            }
+        }
+    }
+
     private fun isTopBanner(label: String): Boolean {
         return label.equals("Scan Me", ignoreCase = true)
     }
@@ -155,24 +322,24 @@ object QRGeneratorEngine {
         badgeBgColor: Int
     ) {
         try {
-            val srcBitmap: Bitmap? = if (uriString == "preset:qraft_logo") {
-                val drawable = androidx.core.content.ContextCompat.getDrawable(context, com.example.R.drawable.ic_qraft_logo)
-                if (drawable != null) {
-                    val bmp = Bitmap.createBitmap(256, 256, Bitmap.Config.ARGB_8888)
-                    val c = Canvas(bmp)
-                    drawable.setBounds(0, 0, 256, 256)
-                    drawable.draw(c)
+            val srcBitmap: Bitmap? = when (uriString) {
+                "preset:qraft_logo" -> loadDrawableBitmap(context, R.drawable.ic_qraft_logo)
+                "preset:whatsapp" -> loadDrawableBitmap(context, R.drawable.ic_brand_whatsapp)
+                "preset:telegram" -> loadDrawableBitmap(context, R.drawable.ic_brand_telegram)
+                "preset:instagram" -> loadDrawableBitmap(context, R.drawable.ic_brand_instagram)
+                "preset:youtube" -> loadDrawableBitmap(context, R.drawable.ic_brand_youtube)
+                "preset:crypto" -> loadDrawableBitmap(context, R.drawable.ic_brand_crypto)
+                "preset:wifi" -> loadDrawableBitmap(context, R.drawable.ic_brand_wifi)
+                else -> {
+                    val uri = Uri.parse(uriString)
+                    val inputStream = context.contentResolver.openInputStream(uri)
+                    val bmp = if (inputStream != null) {
+                        val b = BitmapFactory.decodeStream(inputStream)
+                        inputStream.close()
+                        b
+                    } else null
                     bmp
-                } else null
-            } else {
-                val uri = Uri.parse(uriString)
-                val inputStream = context.contentResolver.openInputStream(uri)
-                val bmp = if (inputStream != null) {
-                    val b = BitmapFactory.decodeStream(inputStream)
-                    inputStream.close()
-                    b
-                } else null
-                bmp
+                }
             }
             if (srcBitmap == null) return
 
@@ -186,8 +353,7 @@ object QRGeneratorEngine {
                 cy + logoSizePx / 2f
             )
 
-            // Draw white/bg protective badge around logo
-            val badgeMargin = logoSizePx * 0.12f
+            val badgeMargin = logoSizePx * 0.14f
             val badgeRect = RectF(
                 logoRect.left - badgeMargin,
                 logoRect.top - badgeMargin,
@@ -199,10 +365,9 @@ object QRGeneratorEngine {
                 style = Paint.Style.FILL
                 setShadowLayer(badgeMargin, 0f, 2f, 0x40000000)
             }
-            val cornerR = badgeMargin * 1.5f
+            val cornerR = badgeMargin * 1.6f
             canvas.drawRoundRect(badgeRect, cornerR, cornerR, badgePaint)
 
-            // Border around badge
             val borderPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
                 color = 0x22000000
                 style = Paint.Style.STROKE
@@ -210,12 +375,20 @@ object QRGeneratorEngine {
             }
             canvas.drawRoundRect(badgeRect, cornerR, cornerR, borderPaint)
 
-            // Draw logo image scaled
             val destRect = Rect(logoRect.left.toInt(), logoRect.top.toInt(), logoRect.right.toInt(), logoRect.bottom.toInt())
             canvas.drawBitmap(srcBitmap, null, destRect, Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG))
         } catch (e: Exception) {
             e.printStackTrace()
         }
+    }
+
+    private fun loadDrawableBitmap(context: Context, resId: Int): Bitmap? {
+        val drawable = ContextCompat.getDrawable(context, resId) ?: return null
+        val bmp = Bitmap.createBitmap(256, 256, Bitmap.Config.ARGB_8888)
+        val c = Canvas(bmp)
+        drawable.setBounds(0, 0, 256, 256)
+        drawable.draw(c)
+        return bmp
     }
 
     private fun drawFrameBanner(
@@ -234,7 +407,6 @@ object QRGeneratorEngine {
             RectF(0f, totalHeight - bannerHeight, width.toFloat(), totalHeight.toFloat())
         }
 
-        // Banner background pill
         val bannerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = fgColor
             style = Paint.Style.FILL
@@ -249,7 +421,6 @@ object QRGeneratorEngine {
         val r = pillRect.height() / 2f
         canvas.drawRoundRect(pillRect, r, r, bannerPaint)
 
-        // Banner text
         val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = if (Color.luminance(fgColor) > 0.6f) Color.BLACK else Color.WHITE
             textSize = bannerHeight * 0.42f
@@ -276,5 +447,21 @@ object QRGeneratorEngine {
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.ITALIC)
         }
         canvas.drawText(text, width - 16f, height - 16f, paint)
+    }
+
+    fun decodeQrFromBitmap(bitmap: Bitmap): String? {
+        return try {
+            val width = bitmap.width
+            val height = bitmap.height
+            val pixels = IntArray(width * height)
+            bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+            val source = com.google.zxing.RGBLuminanceSource(width, height, pixels)
+            val binaryBitmap = com.google.zxing.BinaryBitmap(com.google.zxing.common.HybridBinarizer(source))
+            val reader = com.google.zxing.MultiFormatReader()
+            val result = reader.decode(binaryBitmap)
+            result.text
+        } catch (e: Exception) {
+            null
+        }
     }
 }

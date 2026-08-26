@@ -14,14 +14,19 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountBalanceWallet
+import androidx.compose.material.icons.filled.AlternateEmail
 import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.CameraAlt
+import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.ContactPage
 import androidx.compose.material.icons.filled.Email
-import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Message
+import androidx.compose.material.icons.filled.Payment
 import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.AlertDialog
@@ -53,6 +58,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.domain.model.ContentType
+import com.example.domain.model.CryptoCoin
 import com.example.ui.components.QRPreviewCanvas
 import com.example.ui.components.StyleControlPanel
 import com.example.ui.i18n.AppLanguage
@@ -77,11 +83,16 @@ fun CreateScreen(
     val contentTypes = listOf(
         ContentType.URL to Pair(Strings.get("type_url", language), Icons.Default.Link),
         ContentType.TEXT to Pair(Strings.get("type_text", language), Icons.Default.TextFields),
+        ContentType.WHATSAPP to Pair(Strings.get("type_whatsapp", language), Icons.Default.Chat),
+        ContentType.TELEGRAM to Pair(Strings.get("type_telegram", language), Icons.Default.Send),
+        ContentType.INSTAGRAM to Pair(Strings.get("type_instagram", language), Icons.Default.CameraAlt),
         ContentType.EMAIL to Pair(Strings.get("type_email", language), Icons.Default.Email),
         ContentType.PHONE to Pair(Strings.get("type_phone", language), Icons.Default.Phone),
         ContentType.SMS to Pair(Strings.get("type_sms", language), Icons.Default.Message),
         ContentType.WIFI to Pair(Strings.get("type_wifi", language), Icons.Default.Wifi),
         ContentType.VCARD to Pair(Strings.get("type_vcard", language), Icons.Default.ContactPage),
+        ContentType.CRYPTO to Pair(Strings.get("type_crypto", language), Icons.Default.AccountBalanceWallet),
+        ContentType.PAYPAL to Pair(Strings.get("type_paypal", language), Icons.Default.Payment),
         ContentType.LOCATION to Pair(Strings.get("type_location", language), Icons.Default.LocationOn),
         ContentType.CALENDAR to Pair(Strings.get("type_calendar", language), Icons.Default.CalendarToday)
     )
@@ -159,6 +170,11 @@ fun CreateScreen(
                 when (selectedType) {
                     ContentType.URL -> UrlFormSection(viewModel, language)
                     ContentType.TEXT -> TextFormSection(viewModel, language)
+                    ContentType.WHATSAPP -> WhatsAppFormSection(viewModel, language)
+                    ContentType.TELEGRAM -> TelegramFormSection(viewModel, language)
+                    ContentType.INSTAGRAM -> InstagramFormSection(viewModel, language)
+                    ContentType.CRYPTO -> CryptoFormSection(viewModel, language)
+                    ContentType.PAYPAL -> PayPalFormSection(viewModel, language)
                     ContentType.EMAIL -> EmailFormSection(viewModel, language)
                     ContentType.PHONE -> PhoneFormSection(viewModel, language)
                     ContentType.SMS -> SmsFormSection(viewModel, language)
@@ -255,6 +271,178 @@ private fun TextFormSection(viewModel: MainViewModel, language: AppLanguage) {
             .testTag("text_input"),
         shape = RoundedCornerShape(12.dp)
     )
+}
+
+@Composable
+private fun WhatsAppFormSection(viewModel: MainViewModel, language: AppLanguage) {
+    val form by viewModel.whatsappForm.collectAsState()
+    OutlinedTextField(
+        value = form.phoneNumber,
+        onValueChange = {
+            viewModel.whatsappForm.value = form.copy(phoneNumber = it)
+            viewModel.onFormChanged()
+        },
+        label = { Text(Strings.get("whatsapp_phone", language)) },
+        placeholder = { Text("+1234567890") },
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp)
+    )
+    OutlinedTextField(
+        value = form.message,
+        onValueChange = {
+            viewModel.whatsappForm.value = form.copy(message = it)
+            viewModel.onFormChanged()
+        },
+        label = { Text(Strings.get("whatsapp_message", language)) },
+        minLines = 2,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp)
+    )
+}
+
+@Composable
+private fun TelegramFormSection(viewModel: MainViewModel, language: AppLanguage) {
+    val form by viewModel.telegramForm.collectAsState()
+    OutlinedTextField(
+        value = form.username,
+        onValueChange = {
+            viewModel.telegramForm.value = form.copy(username = it.trim().removePrefix("@"))
+            viewModel.onFormChanged()
+        },
+        label = { Text(Strings.get("telegram_username", language)) },
+        placeholder = { Text("username (without @)") },
+        leadingIcon = { Text("@", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = 12.dp)) },
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp)
+    )
+}
+
+@Composable
+private fun InstagramFormSection(viewModel: MainViewModel, language: AppLanguage) {
+    val form by viewModel.instagramForm.collectAsState()
+    OutlinedTextField(
+        value = form.username,
+        onValueChange = {
+            viewModel.instagramForm.value = form.copy(username = it.trim().removePrefix("@"))
+            viewModel.onFormChanged()
+        },
+        label = { Text(Strings.get("instagram_username", language)) },
+        placeholder = { Text("username") },
+        leadingIcon = { Text("@", style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = 12.dp)) },
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp)
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CryptoFormSection(viewModel: MainViewModel, language: AppLanguage) {
+    val form by viewModel.cryptoForm.collectAsState()
+    var coinExpanded by remember { mutableStateOf(false) }
+
+    ExposedDropdownMenuBox(
+        expanded = coinExpanded,
+        onExpandedChange = { coinExpanded = !coinExpanded }
+    ) {
+        OutlinedTextField(
+            value = "${form.coin.title} (${form.coin.code})",
+            onValueChange = {},
+            readOnly = true,
+            label = { Text(Strings.get("crypto_coin", language)) },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = coinExpanded) },
+            modifier = Modifier
+                .menuAnchor()
+                .fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp)
+        )
+        ExposedDropdownMenu(
+            expanded = coinExpanded,
+            onDismissRequest = { coinExpanded = false }
+        ) {
+            CryptoCoin.values().forEach { coin ->
+                DropdownMenuItem(
+                    text = { Text("${coin.title} (${coin.code})") },
+                    onClick = {
+                        viewModel.cryptoForm.value = form.copy(coin = coin)
+                        viewModel.onFormChanged()
+                        coinExpanded = false
+                    }
+                )
+            }
+        }
+    }
+
+    OutlinedTextField(
+        value = form.address,
+        onValueChange = {
+            viewModel.cryptoForm.value = form.copy(address = it.trim())
+            viewModel.onFormChanged()
+        },
+        label = { Text(Strings.get("crypto_address", language)) },
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp)
+    )
+
+    OutlinedTextField(
+        value = form.amount,
+        onValueChange = {
+            viewModel.cryptoForm.value = form.copy(amount = it)
+            viewModel.onFormChanged()
+        },
+        label = { Text(Strings.get("crypto_amount", language)) },
+        placeholder = { Text("0.05") },
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp)
+    )
+}
+
+@Composable
+private fun PayPalFormSection(viewModel: MainViewModel, language: AppLanguage) {
+    val form by viewModel.paypalForm.collectAsState()
+    OutlinedTextField(
+        value = form.username,
+        onValueChange = {
+            viewModel.paypalForm.value = form.copy(username = it.trim())
+            viewModel.onFormChanged()
+        },
+        label = { Text(Strings.get("paypal_username", language)) },
+        placeholder = { Text("username") },
+        leadingIcon = { Text("paypal.me/", style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(start = 12.dp)) },
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(12.dp)
+    )
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        OutlinedTextField(
+            value = form.amount,
+            onValueChange = {
+                viewModel.paypalForm.value = form.copy(amount = it)
+                viewModel.onFormChanged()
+            },
+            label = { Text(Strings.get("paypal_amount", language)) },
+            placeholder = { Text("25") },
+            modifier = Modifier.weight(1f),
+            shape = RoundedCornerShape(12.dp)
+        )
+        OutlinedTextField(
+            value = form.currency,
+            onValueChange = {
+                viewModel.paypalForm.value = form.copy(currency = it.uppercase())
+                viewModel.onFormChanged()
+            },
+            label = { Text(Strings.get("paypal_currency", language)) },
+            modifier = Modifier.weight(1f),
+            shape = RoundedCornerShape(12.dp)
+        )
+    }
 }
 
 @Composable

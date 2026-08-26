@@ -6,6 +6,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.widget.Toast
 import androidx.core.content.FileProvider
@@ -24,8 +25,8 @@ import com.example.domain.engine.CsvBatchParser
 import com.example.domain.engine.CsvBatchRow
 import com.example.domain.engine.DecodeSessionState
 import com.example.domain.engine.GifFrameExtractor
-import com.example.domain.engine.QRPdfExporter
 import com.example.domain.engine.QRGeneratorEngine
+import com.example.domain.engine.QRPdfExporter
 import com.example.domain.engine.QRSvgExporter
 import com.example.domain.engine.ReliabilityPreset
 import com.example.domain.model.CalendarContent
@@ -33,16 +34,25 @@ import com.example.domain.model.ColorPalettePreset
 import com.example.domain.model.ColorPalettes
 import com.example.domain.model.ContentEncoder
 import com.example.domain.model.ContentType
+import com.example.domain.model.CryptoCoin
+import com.example.domain.model.CryptoContent
 import com.example.domain.model.DotStyle
 import com.example.domain.model.EmailContent
 import com.example.domain.model.ErrorCorrection
+import com.example.domain.model.EyeFrameStyle
+import com.example.domain.model.EyeInnerStyle
+import com.example.domain.model.GradientType
+import com.example.domain.model.InstagramContent
 import com.example.domain.model.LocationContent
+import com.example.domain.model.PayPalContent
 import com.example.domain.model.PhoneContent
 import com.example.domain.model.QRStyle
 import com.example.domain.model.SmsContent
+import com.example.domain.model.TelegramContent
 import com.example.domain.model.TextContent
 import com.example.domain.model.UrlContent
 import com.example.domain.model.VCardContent
+import com.example.domain.model.WhatsAppContent
 import com.example.domain.model.WifiContent
 import com.example.ui.i18n.AppLanguage
 import com.example.ui.i18n.Strings
@@ -74,19 +84,23 @@ enum class AnimatedMode {
     DECODE
 }
 
-class MainViewModel(application: Application) : AndroidViewModel(application) {
+class MainViewModel(
+    application: Application
+) : AndroidViewModel(application) {
 
     private val userPrefs = UserPreferences(application)
     private val repository = QRRepository(AppDatabase.getDatabase(application).qrDao())
 
-    // Language & Theme
+    val isSettingsOpen = MutableStateFlow(false)
+
+    // Language & Theme State
     private val _language = MutableStateFlow(userPrefs.getLanguage())
     val language: StateFlow<AppLanguage> = _language.asStateFlow()
 
     private val _themeMode = MutableStateFlow(userPrefs.getThemeMode())
     val themeMode: StateFlow<AppThemeMode> = _themeMode.asStateFlow()
 
-    // Navigation Tab
+    // Navigation State
     private val _currentTab = MutableStateFlow(AppTab.CREATE)
     val currentTab: StateFlow<AppTab> = _currentTab.asStateFlow()
 
@@ -106,6 +120,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val vcardForm = MutableStateFlow(VCardContent())
     val locationForm = MutableStateFlow(LocationContent())
     val calendarForm = MutableStateFlow(CalendarContent())
+    val whatsappForm = MutableStateFlow(WhatsAppContent())
+    val telegramForm = MutableStateFlow(TelegramContent())
+    val instagramForm = MutableStateFlow(InstagramContent())
+    val cryptoForm = MutableStateFlow(CryptoContent())
+    val paypalForm = MutableStateFlow(PayPalContent())
 
     // QR Style State
     private val _qrStyle = MutableStateFlow(QRStyle())
@@ -183,17 +202,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _typeStats = MutableStateFlow<Map<String, Int>>(emptyMap())
     val typeStats: StateFlow<Map<String, Int>> = _typeStats.asStateFlow()
 
-    // Settings dialog visibility
-    val isSettingsOpen = MutableStateFlow(false)
-
     init {
         updateStatsMap()
         parseBatchCsv()
         triggerQRGeneration()
-        startAnimationPlayerLoop()
     }
 
-    // Language & Theme Actions
     fun setLanguage(lang: AppLanguage) {
         _language.value = lang
         userPrefs.setLanguage(lang)
@@ -237,7 +251,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun triggerQRGeneration() {
         debounceJob?.cancel()
         debounceJob = viewModelScope.launch(Dispatchers.Default) {
-            delay(300) // 300ms debounce
+            delay(200)
             val payload = ContentEncoder.encode(
                 type = _selectedContentType.value,
                 url = urlForm.value,
@@ -248,7 +262,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 wifi = wifiForm.value,
                 vcard = vcardForm.value,
                 location = locationForm.value,
-                calendar = calendarForm.value
+                calendar = calendarForm.value,
+                whatsapp = whatsappForm.value,
+                telegram = telegramForm.value,
+                instagram = instagramForm.value,
+                crypto = cryptoForm.value,
+                paypal = paypalForm.value
             )
             _encodedPayload.value = payload
             val bitmap = QRGeneratorEngine.generateQRBitmap(payload, _qrStyle.value, getApplication())
@@ -275,7 +294,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _typeStats.value = map
     }
 
-    // Actions on generated QR
     fun copyPayloadToClipboard(context: Context) {
         val payload = _encodedPayload.value
         if (payload.isBlank()) return
@@ -305,9 +323,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun exportPng(context: Context) {
-        val bitmap = _previewBitmap.value ?: return
+        val payload = _encodedPayload.value
+        if (payload.isBlank()) return
         viewModelScope.launch(Dispatchers.IO) {
-            val file = saveBitmapToCache(context, bitmap, "qraft_${System.currentTimeMillis()}.png")
+            val exportBmp = QRGeneratorEngine.generateQRBitmap(
+                content = payload,
+                style = _qrStyle.value,
+                context = context,
+                forcedSize = _qrStyle.value.exportResolution
+            ) ?: _previewBitmap.value ?: return@launch
+
+            val file = saveBitmapToCache(context, exportBmp, "qraft_${System.currentTimeMillis()}.png")
             if (file != null) {
                 val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
                 val intent = Intent(Intent.ACTION_SEND).apply {
@@ -383,6 +409,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 ContentType.SMS -> "SMS: ${smsForm.value.phoneNumber}"
                 ContentType.LOCATION -> "Loc: ${locationForm.value.address}"
                 ContentType.CALENDAR -> "Event: ${calendarForm.value.title}"
+                ContentType.WHATSAPP -> "WA: ${whatsappForm.value.phoneNumber}"
+                ContentType.TELEGRAM -> "TG: @${telegramForm.value.username}"
+                ContentType.INSTAGRAM -> "IG: @${instagramForm.value.username}"
+                ContentType.CRYPTO -> "${cryptoForm.value.coin.code}: ${cryptoForm.value.address.take(12)}"
+                ContentType.PAYPAL -> "PayPal: ${paypalForm.value.username}"
             }
             repository.addHistory(
                 QRHistoryEntity(
@@ -434,11 +465,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun clearAllHistory() {
-        viewModelScope.launch(Dispatchers.IO) { repository.clearHistory() }
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.clearHistory()
+        }
     }
 
     fun clearAllPresets() {
-        viewModelScope.launch(Dispatchers.IO) { repository.clearPresets() }
+        viewModelScope.launch(Dispatchers.IO) {
+            repository.clearPresets()
+        }
     }
 
     fun clearAllLocalData(context: Context) {
@@ -447,56 +482,107 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             repository.clearPresets()
             repository.clearBatchSessions()
             userPrefs.clearAllStats()
-            _sessionGeneratedCount.value = 0
-            _totalGeneratedCount.value = 0
-            updateStatsMap()
             withContext(Dispatchers.Main) {
+                updateStatsMap()
+                _totalGeneratedCount.value = 0
+                _sessionGeneratedCount.value = 0
                 showToast(context, Strings.get("clear_data", _language.value))
             }
         }
     }
 
     fun restoreHistoryItem(item: QRHistoryEntity) {
-        val style = deserializeStyleFromJson(item.styleJson)
-        if (style != null) {
-            _qrStyle.value = style
-        }
         val type = try { ContentType.valueOf(item.contentType) } catch (e: Exception) { ContentType.TEXT }
         _selectedContentType.value = type
-        when (type) {
-            ContentType.URL -> urlForm.value = UrlContent(item.content)
-            ContentType.TEXT -> textForm.value = TextContent(item.content)
-            ContentType.PHONE -> phoneForm.value = PhoneContent(item.content.removePrefix("tel:"))
-            ContentType.EMAIL -> emailForm.value = EmailContent(to = item.content.removePrefix("mailto:"))
-            else -> textForm.value = TextContent(item.content)
+        if (type == ContentType.TEXT) {
+            textForm.value = TextContent(text = item.content)
+        } else if (type == ContentType.URL) {
+            urlForm.value = UrlContent(url = item.content)
+        }
+        val restoredStyle = deserializeStyleFromJson(item.styleJson)
+        if (restoredStyle != null) {
+            _qrStyle.value = restoredStyle
         }
         _currentTab.value = AppTab.CREATE
         triggerQRGeneration()
     }
 
-    // Batch Actions
+    fun restoreHistoryItemToCreator(item: QRHistoryEntity) = restoreHistoryItem(item)
+
+    // Scanner actions
+    fun onQrScanned(resultText: String) {
+        _scannedResultText.value = resultText
+    }
+
+    fun clearScannedResult() {
+        _scannedResultText.value = null
+    }
+
+    fun openScannedLink(context: Context, url: String) {
+        try {
+            val parsedUri = if (url.startsWith("http://") || url.startsWith("https://")) {
+                Uri.parse(url)
+            } else {
+                Uri.parse("https://$url")
+            }
+            val intent = Intent(Intent.ACTION_VIEW, parsedUri).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            showToast(context, "Cannot open link: ${e.localizedMessage}")
+        }
+    }
+
+    fun loadScannedIntoCreate(scannedText: String) {
+        val isUrl = scannedText.startsWith("http://", true) || scannedText.startsWith("https://", true)
+        if (isUrl) {
+            _selectedContentType.value = ContentType.URL
+            urlForm.value = UrlContent(url = scannedText)
+        } else {
+            _selectedContentType.value = ContentType.TEXT
+            textForm.value = TextContent(text = scannedText)
+        }
+        _scannedResultText.value = null
+        _currentTab.value = AppTab.CREATE
+        triggerQRGeneration()
+    }
+
+    fun editScannedInCreator(scannedText: String) = loadScannedIntoCreate(scannedText)
+
+    // Batch Generation Functions
     fun parseBatchCsv() {
         val rows = CsvBatchParser.parseCsv(batchCsvText.value)
         _batchParsedRows.value = rows
     }
 
+    fun loadSampleCsv() {
+        batchCsvText.value = CsvBatchParser.SAMPLE_CSV
+        parseBatchCsv()
+    }
+
     fun startBatchGeneration(context: Context) {
         val rows = _batchParsedRows.value.filter { it.isValid }
         if (rows.isEmpty()) return
-        viewModelScope.launch(Dispatchers.IO) {
+
+        viewModelScope.launch(Dispatchers.Default) {
+            _batchProgress.value = Pair(0, rows.size)
             val result = CsvBatchParser.generateBatchZip(
                 context = context,
                 rows = rows,
                 baseStyle = _qrStyle.value,
                 delayMs = batchDelayMs.value,
-                onProgress = { cur, tot -> _batchProgress.value = Pair(cur, tot) }
+                onProgress = { current, total ->
+                    _batchProgress.value = Pair(current, total)
+                }
             )
             _lastBatchZipFile.value = result.zipFile
             _batchProgress.value = null
+
             if (result.zipFile != null) {
                 repository.addBatchSession(
                     BatchSessionEntity(
-                        name = "Batch ${result.successCount} items",
+                        name = "Batch_${System.currentTimeMillis()}",
                         totalCount = result.successCount,
                         zipFilePath = result.zipFile.absolutePath
                     )
@@ -509,6 +595,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun shareBatchZip(context: Context, file: File) {
+        if (!file.exists()) return
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = "application/zip"
@@ -520,28 +607,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         context.startActivity(chooser)
     }
 
-    // Scanner actions
-    fun onQrScanned(text: String) {
-        if (text != _scannedResultText.value) {
-            _scannedResultText.value = text
-        }
+    // Animated QR Encode Functions
+    fun onSelectAnimSourceImage(uri: Uri) {
+        animSourceUri.value = uri
+        encodeAnimatedImage(getApplication(), uri)
     }
 
-    fun clearScannedResult() {
-        _scannedResultText.value = null
-    }
-
-    fun loadScannedIntoCreate(text: String) {
-        _selectedContentType.value = ContentType.TEXT
-        textForm.value = TextContent(text)
-        _currentTab.value = AppTab.CREATE
-        triggerQRGeneration()
-    }
-
-    // Animated QR Actions
     fun encodeAnimatedImage(context: Context, uri: Uri) {
         animSourceUri.value = uri
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.Default) {
             val result = AnimatedQREngine.encodeImageToFrames(
                 context = context,
                 imageUri = uri,
@@ -554,30 +628,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun onAnimatedQrScanned(rawPayload: String) {
-        val newState = AnimatedQREngine.processIncomingFrame(_animDecodeState.value, rawPayload)
-        _animDecodeState.value = newState
-    }
-
-    fun decodeUploadedGif(context: Context, uri: Uri) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val state = GifFrameExtractor.decodeFromImageOrGif(context, uri)
-            _animDecodeState.value = state
-        }
-    }
-
-    fun resetAnimatedDecodeSession() {
-        _animDecodeState.value = DecodeSessionState()
-    }
-
     fun exportAnimatedGif(context: Context) {
         val result = _animEncodeResult.value ?: return
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.Default) {
             val file = AnimatedQREngine.exportFramesToGif(
-                context,
-                result.frames,
-                result.sessionId,
-                animFps.value
+                context = context,
+                frames = result.frames,
+                sessionId = result.sessionId,
+                fps = animFps.value
             )
             if (file != null) {
                 val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
@@ -595,8 +653,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun exportAnimatedFramesZip(context: Context) {
         val result = _animEncodeResult.value ?: return
-        viewModelScope.launch(Dispatchers.IO) {
-            val file = AnimatedQREngine.exportFramesToZip(context, result.frames, result.sessionId)
+        viewModelScope.launch(Dispatchers.Default) {
+            val file = AnimatedQREngine.exportFramesToZip(
+                context = context,
+                frames = result.frames,
+                sessionId = result.sessionId
+            )
             if (file != null) {
                 val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
                 val intent = Intent(Intent.ACTION_SEND).apply {
@@ -611,9 +673,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    // Animated QR Decode Functions
+    fun onAnimatedQrScanned(rawPayload: String) {
+        val updated = AnimatedQREngine.processIncomingFrame(_animDecodeState.value, rawPayload)
+        _animDecodeState.value = updated
+    }
+
+    fun onAnimatedQrFrameScanned(qrContent: String) = onAnimatedQrScanned(qrContent)
+
+    fun decodeUploadedGif(context: Context, gifUri: Uri) {
+        viewModelScope.launch(Dispatchers.Default) {
+            val state = GifFrameExtractor.decodeFromImageOrGif(context, gifUri)
+            _animDecodeState.value = state
+        }
+    }
+
+    fun decodeGifFile(context: Context, gifUri: Uri) = decodeUploadedGif(context, gifUri)
+
+    fun resetAnimatedDecodeSession() {
+        _animDecodeState.value = DecodeSessionState()
+    }
+
     fun saveReconstructedImage(context: Context, bitmap: Bitmap) {
         viewModelScope.launch(Dispatchers.IO) {
-            val file = saveBitmapToCache(context, bitmap, "reconstructed_${System.currentTimeMillis()}.jpg")
+            val file = saveBitmapToCache(context, bitmap, "qraft_reconstructed_${System.currentTimeMillis()}.jpg")
             if (file != null) {
                 val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
                 val intent = Intent(Intent.ACTION_SEND).apply {
@@ -621,31 +704,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     putExtra(Intent.EXTRA_STREAM, uri)
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 }
-                val chooser = Intent.createChooser(intent, "Save / Share Reconstructed Image")
+                val chooser = Intent.createChooser(intent, "Save Reconstructed Image")
                 chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 context.startActivity(chooser)
             }
         }
     }
 
-    private fun startAnimationPlayerLoop() {
-        viewModelScope.launch(Dispatchers.Default) {
-            while (true) {
-                val frames = _animEncodeResult.value?.frames
-                if (animIsPlaying.value && !frames.isNullOrEmpty()) {
-                    val nextIndex = if (animCurrentFrameIndex.value + 1 < frames.size) {
-                        animCurrentFrameIndex.value + 1
-                    } else if (animLoop.value) {
-                        0
-                    } else {
-                        animCurrentFrameIndex.value
-                    }
-                    animCurrentFrameIndex.value = nextIndex
-                }
-                val delayMs = (1000L / animFps.value.coerceIn(1, 20))
-                delay(delayMs)
-            }
-        }
+    fun saveReconstructedImage(context: Context) {
+        val bmp = _animDecodeState.value.reconstructedBitmap ?: return
+        saveReconstructedImage(context, bmp)
     }
 
     private fun saveBitmapToCache(context: Context, bitmap: Bitmap, fileName: String): File? {
@@ -674,14 +742,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         obj.put("fg", style.fgColor)
         obj.put("grad", style.gradientMode)
         obj.put("gradEnd", style.gradientEndColor)
+        obj.put("gradType", style.gradientType.name)
         obj.put("bg", style.bgColor)
         obj.put("trans", style.transparentBg)
         obj.put("margin", style.margin)
         obj.put("dot", style.dotStyle.name)
+        obj.put("eyeFrame", style.eyeFrameStyle.name)
+        obj.put("eyeInner", style.eyeInnerStyle.name)
+        obj.put("logoUri", style.logoUri ?: "")
         obj.put("logoSize", style.logoSizePercent)
         obj.put("frame", style.frameLabel)
         obj.put("wm", style.watermarkText)
         obj.put("wmAlpha", style.watermarkOpacity.toDouble())
+        obj.put("palette", style.activePaletteId ?: "")
+        obj.put("exportRes", style.exportResolution)
         return obj.toString()
     }
 
@@ -694,14 +768,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 fgColor = obj.optLong("fg", 0xFF000000),
                 gradientMode = obj.optBoolean("grad", false),
                 gradientEndColor = obj.optLong("gradEnd", 0xFF1A1A1A),
+                gradientType = try { GradientType.valueOf(obj.optString("gradType", "DIAGONAL")) } catch (e: Exception) { GradientType.DIAGONAL },
                 bgColor = obj.optLong("bg", 0xFFFFFFFF),
                 transparentBg = obj.optBoolean("trans", false),
                 margin = obj.optInt("margin", 2),
-                dotStyle = DotStyle.valueOf(obj.optString("dot", "SQUARE")),
+                dotStyle = try { DotStyle.valueOf(obj.optString("dot", "SQUARE")) } catch (e: Exception) { DotStyle.SQUARE },
+                eyeFrameStyle = try { EyeFrameStyle.valueOf(obj.optString("eyeFrame", "SQUARE")) } catch (e: Exception) { EyeFrameStyle.SQUARE },
+                eyeInnerStyle = try { EyeInnerStyle.valueOf(obj.optString("eyeInner", "SQUARE")) } catch (e: Exception) { EyeInnerStyle.SQUARE },
+                logoUri = obj.optString("logoUri").ifEmpty { null },
                 logoSizePercent = obj.optInt("logoSize", 20),
                 frameLabel = obj.optString("frame", "None"),
                 watermarkText = obj.optString("wm", ""),
-                watermarkOpacity = obj.optDouble("wmAlpha", 0.5).toFloat()
+                watermarkOpacity = obj.optDouble("wmAlpha", 0.5).toFloat(),
+                activePaletteId = obj.optString("palette").ifEmpty { null },
+                exportResolution = obj.optInt("exportRes", 1024)
             )
         } catch (e: Exception) {
             null

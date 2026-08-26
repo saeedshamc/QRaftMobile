@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.ColorLens
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
@@ -65,6 +66,9 @@ import com.example.domain.model.ColorPalettePreset
 import com.example.domain.model.ColorPalettes
 import com.example.domain.model.DotStyle
 import com.example.domain.model.ErrorCorrection
+import com.example.domain.model.EyeFrameStyle
+import com.example.domain.model.EyeInnerStyle
+import com.example.domain.model.GradientType
 import com.example.domain.model.QRStyle
 import com.example.ui.i18n.AppLanguage
 import com.example.ui.i18n.Strings
@@ -99,6 +103,11 @@ fun StyleControlPanel(
         0xFFFFFFFF, 0xFFF8FAFC, 0xFFF0FDF4, 0xFFFFF1F2
     )
 
+    // Calculate contrast ratio between FG and BG for scannability
+    val fgLum = calculateLuminance(style.fgColor)
+    val bgLum = if (style.transparentBg) 1.0 else calculateLuminance(style.bgColor)
+    val contrastRatio = (Math.max(fgLum, bgLum) + 0.05) / (Math.min(fgLum, bgLum) + 0.05)
+
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
@@ -110,11 +119,37 @@ fun StyleControlPanel(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text(
-                text = Strings.get("style_heading", language),
-                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                color = MaterialTheme.colorScheme.onSurface
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = Strings.get("style_heading", language),
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                // Scannability badge
+                val (badgeColor, badgeText) = when {
+                    contrastRatio >= 4.5 -> Pair(Color(0xFF10B981), Strings.get("contrast_excellent", language))
+                    contrastRatio >= 2.8 -> Pair(Color(0xFFF59E0B), Strings.get("contrast_good", language))
+                    else -> Pair(Color(0xFFEF4444), Strings.get("contrast_low", language))
+                }
+                Surface(
+                    color = badgeColor.copy(alpha = 0.15f),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(imageVector = Icons.Default.Shield, contentDescription = null, tint = badgeColor, modifier = Modifier.size(14.dp))
+                        Text(text = badgeText, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold), color = badgeColor)
+                    }
+                }
+            }
 
             // 1. Color Palette Presets Row
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -224,7 +259,7 @@ fun StyleControlPanel(
                 }
             }
 
-            // 3. Dot Style Selection (Square, Rounded, Dots)
+            // 3. Dot Pattern Style (Square, Rounded, Dots, Classy Diamond)
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
                     text = Strings.get("dot_style", language),
@@ -233,20 +268,22 @@ fun StyleControlPanel(
                 )
 
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     listOf(
                         DotStyle.SQUARE to Strings.get("dot_square", language),
                         DotStyle.ROUNDED to Strings.get("dot_rounded", language),
-                        DotStyle.DOTS to Strings.get("dot_dots", language)
+                        DotStyle.DOTS to Strings.get("dot_dots", language),
+                        DotStyle.CLASSY to Strings.get("dot_classy", language)
                     ).forEach { (dot, label) ->
                         val isSelected = style.dotStyle == dot
                         FilterChip(
                             selected = isSelected,
                             onClick = { onStyleChange { it.copy(dotStyle = dot) } },
                             label = { Text(label) },
-                            modifier = Modifier.weight(1f),
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = MaterialTheme.colorScheme.primary,
                                 selectedLabelColor = MaterialTheme.colorScheme.onPrimary
@@ -256,59 +293,75 @@ fun StyleControlPanel(
                 }
             }
 
-            // 4. Output Size Slider
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = Strings.get("size_px", language),
-                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = "${style.sizePx} px",
-                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-
-                Slider(
-                    value = style.sizePx.toFloat(),
-                    onValueChange = { onStyleChange { s -> s.copy(sizePx = it.toInt()) } },
-                    valueRange = 150f..1000f,
-                    steps = 17
+            // 4. Finder Eye Frame Style (Square, Rounded, Circle, Leaf)
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    text = Strings.get("eye_frame_style", language),
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf(
+                        EyeFrameStyle.SQUARE to Strings.get("eye_frame_square", language),
+                        EyeFrameStyle.ROUNDED to Strings.get("eye_frame_rounded", language),
+                        EyeFrameStyle.CIRCLE to Strings.get("eye_frame_circle", language),
+                        EyeFrameStyle.LEAF to Strings.get("eye_frame_leaf", language)
+                    ).forEach { (frameStyle, label) ->
+                        val isSelected = style.eyeFrameStyle == frameStyle
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = { onStyleChange { it.copy(eyeFrameStyle = frameStyle) } },
+                            label = { Text(label) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+                            )
+                        )
+                    }
+                }
             }
 
-            // 5. Quiet Zone Margin Slider
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = Strings.get("margin_quiet", language),
-                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = "${style.margin} mod",
-                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-
-                Slider(
-                    value = style.margin.toFloat(),
-                    onValueChange = { onStyleChange { s -> s.copy(margin = it.toInt()) } },
-                    valueRange = 0f..10f,
-                    steps = 10
+            // 5. Eye Center Dot Style (Square, Rounded, Dot, Diamond)
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    text = Strings.get("eye_inner_style", language),
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf(
+                        EyeInnerStyle.SQUARE to Strings.get("eye_inner_square", language),
+                        EyeInnerStyle.ROUNDED to Strings.get("eye_inner_rounded", language),
+                        EyeInnerStyle.DOT to Strings.get("eye_inner_dot", language),
+                        EyeInnerStyle.DIAMOND to Strings.get("eye_inner_diamond", language)
+                    ).forEach { (innerStyle, label) ->
+                        val isSelected = style.eyeInnerStyle == innerStyle
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = { onStyleChange { it.copy(eyeInnerStyle = innerStyle) } },
+                            label = { Text(label) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+                            )
+                        )
+                    }
+                }
             }
 
-            // 6. Gradient Mode Toggle & Swatches
+            // 6. Gradient Mode & Directions
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -323,6 +376,33 @@ fun StyleControlPanel(
                         checked = style.gradientMode,
                         onCheckedChange = { onStyleChange { s -> s.copy(gradientMode = it, activePaletteId = null) } }
                     )
+                }
+
+                if (style.gradientMode) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf(
+                            GradientType.DIAGONAL to Strings.get("grad_diag", language),
+                            GradientType.HORIZONTAL to Strings.get("grad_horiz", language),
+                            GradientType.VERTICAL to Strings.get("grad_vert", language),
+                            GradientType.RADIAL to Strings.get("grad_radial", language)
+                        ).forEach { (gType, label) ->
+                            val isSelected = style.gradientType == gType
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = { onStyleChange { it.copy(gradientType = gType) } },
+                                label = { Text(label) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = MaterialTheme.colorScheme.secondary,
+                                    selectedLabelColor = MaterialTheme.colorScheme.onSecondary
+                                )
+                            )
+                        }
+                    }
                 }
 
                 // Foreground & Gradient End Color Pickers
@@ -409,43 +489,65 @@ fun StyleControlPanel(
                 }
             }
 
-            // 8. Center Logo Overlay
+            // 8. Brand Preset Logos & Center Logo Overlay
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
-                    text = Strings.get("center_logo", language),
+                    text = Strings.get("preset_brand_logos", language),
                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
-                // Preset Logo Options
+                // Horizontal Preset Logos
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    val presets = listOf(
+                        Triple("preset:qraft_logo", "QRaft", R.drawable.ic_qraft_logo),
+                        Triple("preset:whatsapp", "WhatsApp", R.drawable.ic_brand_whatsapp),
+                        Triple("preset:telegram", "Telegram", R.drawable.ic_brand_telegram),
+                        Triple("preset:instagram", "Instagram", R.drawable.ic_brand_instagram),
+                        Triple("preset:youtube", "YouTube", R.drawable.ic_brand_youtube),
+                        Triple("preset:crypto", "Crypto", R.drawable.ic_brand_crypto),
+                        Triple("preset:wifi", "Wi-Fi", R.drawable.ic_brand_wifi)
+                    )
+
+                    presets.forEach { (presetUri, label, iconRes) ->
+                        val isSelected = style.logoUri == presetUri
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = {
+                                if (isSelected) {
+                                    onStyleChange { it.copy(logoUri = null) }
+                                } else {
+                                    onStyleChange { it.copy(logoUri = presetUri, errorCorrection = ErrorCorrection.H) }
+                                }
+                            },
+                            leadingIcon = {
+                                Image(
+                                    painter = painterResource(id = iconRes),
+                                    contentDescription = label,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            },
+                            label = { Text(label, fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+                            )
+                        )
+                    }
+                }
+
+                // Custom Logo File Picker & Remove
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    val isQRaftLogo = style.logoUri == "preset:qraft_logo"
-                    FilterChip(
-                        selected = isQRaftLogo,
-                        onClick = {
-                            if (isQRaftLogo) {
-                                onStyleChange { it.copy(logoUri = null) }
-                            } else {
-                                onStyleChange { it.copy(logoUri = "preset:qraft_logo", errorCorrection = ErrorCorrection.H) }
-                            }
-                        },
-                        leadingIcon = {
-                            Box(modifier = Modifier.size(20.dp).clip(RoundedCornerShape(4.dp))) {
-                                Image(
-                                    painter = painterResource(id = R.drawable.ic_qraft_logo),
-                                    contentDescription = "QRaft Logo",
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                        },
-                        label = { Text("QRaft Logo", fontWeight = if (isQRaftLogo) FontWeight.Bold else FontWeight.Normal) },
-                        modifier = Modifier.weight(1f)
-                    )
-
+                    val isCustom = style.logoUri != null && !style.logoUri.startsWith("preset:")
                     FilledTonalButton(
                         onClick = { logoPickerLauncher.launch("image/*") },
                         modifier = Modifier.weight(1f)
@@ -456,7 +558,7 @@ fun StyleControlPanel(
                             modifier = Modifier.padding(end = 6.dp)
                         )
                         Text(
-                            text = if (style.logoUri != null && !isQRaftLogo) "Change" else Strings.get("choose_logo", language),
+                            text = if (isCustom) "Change Image" else Strings.get("choose_logo", language),
                             style = MaterialTheme.typography.labelMedium
                         )
                     }
@@ -496,29 +598,6 @@ fun StyleControlPanel(
                             valueRange = 10f..35f,
                             steps = 5
                         )
-
-                        Surface(
-                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
-                            shape = RoundedCornerShape(8.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Info,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Text(
-                                    text = Strings.get("logo_tip", language),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                                )
-                            }
-                        }
                     }
                 }
             }
@@ -620,4 +699,16 @@ fun StyleControlPanel(
             }
         }
     }
+}
+
+private fun calculateLuminance(colorLong: Long): Double {
+    val r = ((colorLong shr 16) and 0xFF) / 255.0
+    val g = ((colorLong shr 8) and 0xFF) / 255.0
+    val b = (colorLong and 0xFF) / 255.0
+
+    fun channel(c: Double): Double {
+        return if (c <= 0.03928) c / 12.92 else Math.pow((c + 0.055) / 1.055, 2.4)
+    }
+
+    return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b)
 }
