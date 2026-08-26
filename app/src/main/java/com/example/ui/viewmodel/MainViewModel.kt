@@ -333,7 +333,7 @@ class MainViewModel(
                 forcedSize = _qrStyle.value.exportResolution
             ) ?: _previewBitmap.value ?: return@launch
 
-            val file = saveBitmapToCache(context, exportBmp, "qraft_${System.currentTimeMillis()}.png")
+            val file = saveBitmapToCache(context, exportBmp, "qraft_${System.currentTimeMillis()}.png", Bitmap.CompressFormat.PNG)
             if (file != null) {
                 val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
                 val intent = Intent(Intent.ACTION_SEND).apply {
@@ -342,6 +342,33 @@ class MainViewModel(
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 }
                 val chooser = Intent.createChooser(intent, "Save or Export PNG")
+                chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(chooser)
+                recordGeneration()
+            }
+        }
+    }
+
+    fun exportJpg(context: Context) {
+        val payload = _encodedPayload.value
+        if (payload.isBlank()) return
+        viewModelScope.launch(Dispatchers.IO) {
+            val exportBmp = QRGeneratorEngine.generateQRBitmap(
+                content = payload,
+                style = _qrStyle.value,
+                context = context,
+                forcedSize = _qrStyle.value.exportResolution
+            ) ?: _previewBitmap.value ?: return@launch
+
+            val file = saveBitmapToCache(context, exportBmp, "qraft_${System.currentTimeMillis()}.jpg", Bitmap.CompressFormat.JPEG)
+            if (file != null) {
+                val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+                val intent = Intent(Intent.ACTION_SEND).apply {
+                    type = "image/jpeg"
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                val chooser = Intent.createChooser(intent, "Save or Export JPG")
                 chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 context.startActivity(chooser)
                 recordGeneration()
@@ -511,7 +538,49 @@ class MainViewModel(
 
     // Scanner actions
     fun onQrScanned(resultText: String) {
+        if (_scannedResultText.value == resultText) return
         _scannedResultText.value = resultText
+        triggerHapticFeedback()
+
+        // Log scanned QR code into Room Database history
+        viewModelScope.launch(Dispatchers.IO) {
+            val isUrl = resultText.startsWith("http://", true) || resultText.startsWith("https://", true)
+            val type = if (isUrl) ContentType.URL.name else ContentType.TEXT.name
+            val styleJson = serializeStyleToJson(_qrStyle.value)
+            val label = if (isUrl) "Scanned URL: ${resultText.take(24)}" else "Scanned: ${resultText.take(24)}"
+            repository.addHistory(
+                QRHistoryEntity(
+                    content = resultText,
+                    contentType = type,
+                    styleJson = styleJson,
+                    label = label,
+                    notes = "Scanned with camera"
+                )
+            )
+        }
+    }
+
+    private fun triggerHapticFeedback() {
+        try {
+            val app = getApplication<Application>()
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                val vibratorManager = app.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? android.os.VibratorManager
+                vibratorManager?.defaultVibrator?.vibrate(
+                    android.os.VibrationEffect.createOneShot(70, android.os.VibrationEffect.DEFAULT_AMPLITUDE)
+                )
+            } else {
+                @Suppress("DEPRECATION")
+                val vibrator = app.getSystemService(Context.VIBRATOR_SERVICE) as? android.os.Vibrator
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                    vibrator?.vibrate(android.os.VibrationEffect.createOneShot(70, android.os.VibrationEffect.DEFAULT_AMPLITUDE))
+                } else {
+                    @Suppress("DEPRECATION")
+                    vibrator?.vibrate(70)
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
     }
 
     fun clearScannedResult() {
@@ -629,15 +698,21 @@ class MainViewModel(
     }
 
     fun exportAnimatedGif(context: Context) {
-        val result = _animEncodeResult.value ?: return
-        viewModelScope.launch(Dispatchers.Default) {
+        val result = _animEncodeResult.value ?: run {
+            showToast(context, "No animated frames available.")
+            return
+        }
+        viewModelScope.launch(Dispatchers.IO) {
+            withContext(Dispatchers.Main) {
+                showToast(context, Strings.get("generating_progress", _language.value))
+            }
             val file = AnimatedQREngine.exportFramesToGif(
                 context = context,
                 frames = result.frames,
                 sessionId = result.sessionId,
                 fps = animFps.value
             )
-            if (file != null) {
+            if (file != null && file.exists() && file.length() > 0) {
                 val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
                 val intent = Intent(Intent.ACTION_SEND).apply {
                     type = "image/gif"
@@ -647,6 +722,10 @@ class MainViewModel(
                 val chooser = Intent.createChooser(intent, "Export Animated GIF")
                 chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 context.startActivity(chooser)
+            } else {
+                withContext(Dispatchers.Main) {
+                    showToast(context, "Failed to export GIF")
+                }
             }
         }
     }
@@ -716,11 +795,16 @@ class MainViewModel(
         saveReconstructedImage(context, bmp)
     }
 
-    private fun saveBitmapToCache(context: Context, bitmap: Bitmap, fileName: String): File? {
+    private fun saveBitmapToCache(
+        context: Context,
+        bitmap: Bitmap,
+        fileName: String,
+        format: Bitmap.CompressFormat = Bitmap.CompressFormat.PNG
+    ): File? {
         return try {
             val file = File(context.cacheDir, fileName)
             val fos = FileOutputStream(file)
-            bitmap.compress(Bitmap.CompressFormat.PNG, 100, fos)
+            bitmap.compress(format, 100, fos)
             fos.flush()
             fos.close()
             file

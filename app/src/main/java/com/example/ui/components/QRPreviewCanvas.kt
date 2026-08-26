@@ -66,6 +66,7 @@ fun QRPreviewCanvas(
     onCopy: () -> Unit,
     onShare: () -> Unit,
     onExportPng: () -> Unit,
+    onExportJpg: () -> Unit,
     onExportSvg: () -> Unit,
     onExportPdf: () -> Unit,
     onAddToHistory: () -> Unit,
@@ -209,6 +210,13 @@ fun QRPreviewCanvas(
                             onClick = {
                                 showExportMenu = false
                                 onExportPng()
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(Strings.get("export_jpg", language)) },
+                            onClick = {
+                                showExportMenu = false
+                                onExportJpg()
                             }
                         )
                         DropdownMenuItem(

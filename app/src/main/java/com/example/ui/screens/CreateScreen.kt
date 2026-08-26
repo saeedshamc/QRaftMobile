@@ -143,6 +143,7 @@ fun CreateScreen(
             onCopy = { viewModel.copyPayloadToClipboard(context) },
             onShare = { viewModel.shareGeneratedQR(context) },
             onExportPng = { viewModel.exportPng(context) },
+            onExportJpg = { viewModel.exportJpg(context) },
             onExportSvg = { viewModel.exportSvg(context) },
             onExportPdf = { viewModel.exportPdf(context) },
             onAddToHistory = { viewModel.addToHistory(context) },

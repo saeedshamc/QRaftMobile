@@ -1,9 +1,180 @@
-<?xml version="1.0" encoding="utf-8"?>
-<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item
-        android:width="72dp"
-        android:height="72dp"
-        android:drawable="@drawable/ic_qraft_logo"
-        android:gravity="center" />
-</layer-list>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512">
 
+    <!-- Inset group to fit perfectly into adaptive icon safe zone -->
+    <group
+        android:scaleX="0.72"
+        android:scaleY="0.72"
+        android:translateX="71.68"
+        android:translateY="71.68">
+
+        <!-- Card Background (rx=104, ry=104) -->
+        <path
+            android:pathData="M 128,24 L 384,24 A 104,104 0 0,1 488,128 L 488,384 A 104,104 0 0,1 384,488 L 128,488 A 104,104 0 0,1 24,384 L 24,128 A 104,104 0 0,1 128,24 Z">
+            <aapt:attr name="android:fillColor">
+                <gradient
+                    android:startX="24"
+                    android:startY="24"
+                    android:endX="488"
+                    android:endY="488"
+                    android:type="linear">
+                    <item android:color="#FF181259" android:offset="0.0" />
+                    <item android:color="#FF2A1B6E" android:offset="0.5" />
+                    <item android:color="#FF0A0E23" android:offset="1.0" />
+                </gradient>
+            </aapt:attr>
+        </path>
+
+        <!-- Card Border Glow -->
+        <path
+            android:pathData="M 128,24 L 384,24 A 104,104 0 0,1 488,128 L 488,384 A 104,104 0 0,1 384,488 L 128,488 A 104,104 0 0,1 24,384 L 24,128 A 104,104 0 0,1 128,24 Z"
+            android:strokeWidth="3">
+            <aapt:attr name="android:strokeColor">
+                <gradient
+                    android:startX="24"
+                    android:startY="24"
+                    android:endX="488"
+                    android:endY="488"
+                    android:type="linear">
+                    <item android:color="#E65CC8FA" android:offset="0.0" />
+                    <item android:color="#739B8CF7" android:offset="0.5" />
+                    <item android:color="#33D08CF7" android:offset="1.0" />
+                </gradient>
+            </aapt:attr>
+        </path>
+
+        <!-- Ambient top highlight -->
+        <path
+            android:pathData="M 220,20 A 190,70 0 1,0 220,160 A 190,70 0 1,0 220,20 Z"
+            android:fillColor="#38BDF8"
+            android:fillAlpha="0.07" />
+
+        <!-- Soft diagonal scan beam -->
+        <group
+            android:pivotX="256"
+            android:pivotY="256"
+            android:rotation="-32">
+            <path
+                android:pathData="M -22,238 L 534,238 A 18,18 0 0,1 552,256 L 552,256 A 18,18 0 0,1 534,274 L -22,274 A 18,18 0 0,1 -40,256 L -40,256 A 18,18 0 0,1 -22,238 Z">
+                <aapt:attr name="android:fillColor">
+                    <gradient
+                        android:startX="-40"
+                        android:startY="256"
+                        android:endX="552"
+                        android:endY="256"
+                        android:type="linear">
+                        <item android:color="#0022D3EE" android:offset="0.0" />
+                        <item android:color="#8022D3EE" android:offset="0.5" />
+                        <item android:color="#0022D3EE" android:offset="1.0" />
+                    </gradient>
+                </aapt:attr>
+            </path>
+        </group>
+
+        <!-- Top-Left finder pattern -->
+        <path
+            android:pathData="M 110,80 L 178,80 A 30,30 0 0,1 208,110 L 208,178 A 30,30 0 0,1 178,208 L 110,208 A 30,30 0 0,1 80,178 L 80,110 A 30,30 0 0,1 110,80 Z">
+            <aapt:attr name="android:fillColor">
+                <gradient
+                    android:startX="80"
+                    android:startY="80"
+                    android:endX="208"
+                    android:endY="208"
+                    android:type="linear">
+                    <item android:color="#FF22D3EE" android:offset="0.0" />
+                    <item android:color="#FF6366F1" android:offset="1.0" />
+                </gradient>
+            </aapt:attr>
+        </path>
+        <path
+            android:pathData="M 121,104 L 167,104 A 17,17 0 0,1 184,121 L 184,167 A 17,17 0 0,1 167,184 L 121,184 A 17,17 0 0,1 104,167 L 104,121 A 17,17 0 0,1 121,104 Z"
+            android:fillColor="#FF12162B" />
+        <path
+            android:pathData="M 132,122 L 156,122 A 10,10 0 0,1 166,132 L 166,156 A 10,10 0 0,1 156,166 L 132,166 A 10,10 0 0,1 122,156 L 122,132 A 10,10 0 0,1 132,122 Z"
+            android:fillColor="#FF5EEAF0" />
+
+        <!-- Top-Right finder pattern -->
+        <path
+            android:pathData="M 334,80 L 402,80 A 30,30 0 0,1 432,110 L 432,178 A 30,30 0 0,1 402,208 L 334,208 A 30,30 0 0,1 304,178 L 304,110 A 30,30 0 0,1 334,80 Z">
+            <aapt:attr name="android:fillColor">
+                <gradient
+                    android:startX="304"
+                    android:startY="80"
+                    android:endX="432"
+                    android:endY="208"
+                    android:type="linear">
+                    <item android:color="#FF818CF8" android:offset="0.0" />
+                    <item android:color="#FFC084FC" android:offset="1.0" />
+                </gradient>
+            </aapt:attr>
+        </path>
+        <path
+            android:pathData="M 345,104 L 391,104 A 17,17 0 0,1 408,121 L 408,167 A 17,17 0 0,1 391,184 L 345,184 A 17,17 0 0,1 328,167 L 328,121 A 17,17 0 0,1 345,104 Z"
+            android:fillColor="#FF12162B" />
+        <path
+            android:pathData="M 356,122 L 380,122 A 10,10 0 0,1 390,132 L 390,156 A 10,10 0 0,1 380,166 L 356,166 A 10,10 0 0,1 346,156 L 346,132 A 10,10 0 0,1 356,122 Z"
+            android:fillColor="#FFC4B5FD" />
+
+        <!-- Bottom-Left finder pattern -->
+        <path
+            android:pathData="M 110,304 L 178,304 A 30,30 0 0,1 208,334 L 208,402 A 30,30 0 0,1 178,432 L 110,432 A 30,30 0 0,1 80,402 L 80,334 A 30,30 0 0,1 110,304 Z">
+            <aapt:attr name="android:fillColor">
+                <gradient
+                    android:startX="80"
+                    android:startY="304"
+                    android:endX="208"
+                    android:endY="432"
+                    android:type="linear">
+                    <item android:color="#FF2DD4BF" android:offset="0.0" />
+                    <item android:color="#FF22D3EE" android:offset="1.0" />
+                </gradient>
+            </aapt:attr>
+        </path>
+        <path
+            android:pathData="M 121,328 L 167,328 A 17,17 0 0,1 184,345 L 184,391 A 17,17 0 0,1 167,408 L 121,408 A 17,17 0 0,1 104,391 L 104,345 A 17,17 0 0,1 121,328 Z"
+            android:fillColor="#FF12162B" />
+        <path
+            android:pathData="M 132,346 L 156,346 A 10,10 0 0,1 166,356 L 166,380 A 10,10 0 0,1 156,390 L 132,390 A 10,10 0 0,1 122,380 L 122,356 A 10,10 0 0,1 132,346 Z"
+            android:fillColor="#FF99F6E4" />
+
+        <!-- Bottom-Right Alignment Marker -->
+        <path
+            android:pathData="M 330,312 L 366,312 A 18,18 0 0,1 384,330 L 384,366 A 18,18 0 0,1 366,384 L 330,384 A 18,18 0 0,1 312,366 L 312,330 A 18,18 0 0,1 330,312 Z">
+            <aapt:attr name="android:fillColor">
+                <gradient
+                    android:startX="312"
+                    android:startY="312"
+                    android:endX="384"
+                    android:endY="384"
+                    android:type="linear">
+                    <item android:color="#FFF472B6" android:offset="0.0" />
+                    <item android:color="#FFC084FC" android:offset="1.0" />
+                </gradient>
+            </aapt:attr>
+        </path>
+        <path
+            android:pathData="M 337,326 L 359,326 A 11,11 0 0,1 370,337 L 370,359 A 11,11 0 0,1 359,370 L 337,370 A 11,11 0 0,1 326,359 L 326,337 A 11,11 0 0,1 337,326 Z"
+            android:fillColor="#FF12162B" />
+        <path
+            android:pathData="M 344,339 L 352,339 A 5,5 0 0,1 357,344 L 357,352 A 5,5 0 0,1 352,357 L 344,357 A 5,5 0 0,1 339,352 L 339,344 A 5,5 0 0,1 344,339 Z"
+            android:fillColor="#FFFBCFE8" />
+
+        <!-- Dots -->
+        <path
+            android:pathData="M 248,94 L 256,94 A 4,4 0 0,1 260,98 L 260,106 A 4,4 0 0,1 256,110 L 248,110 A 4,4 0 0,1 244,106 L 244,98 A 4,4 0 0,1 248,94 Z"
+            android:fillColor="#FFA5B4FC"
+            android:fillAlpha="0.85" />
+        <path
+            android:pathData="M 136,244 L 144,244 A 4,4 0 0,1 148,248 L 148,256 A 4,4 0 0,1 144,260 L 136,260 A 4,4 0 0,1 132,256 L 132,248 A 4,4 0 0,1 136,244 Z"
+            android:fillColor="#FF5EEAD4"
+            android:fillAlpha="0.75" />
+        <path
+            android:pathData="M 270,266 L 276,266 A 4,4 0 0,1 280,270 L 280,276 A 4,4 0 0,1 276,280 L 270,280 A 4,4 0 0,1 266,276 L 266,270 A 4,4 0 0,1 270,266 Z"
+            android:fillColor="#FFF0ABFC"
+            android:fillAlpha="0.70" />
+    </group>
+</vector>
