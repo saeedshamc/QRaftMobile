@@ -155,10 +155,25 @@ object QRGeneratorEngine {
         badgeBgColor: Int
     ) {
         try {
-            val uri = Uri.parse(uriString)
-            val inputStream = context.contentResolver.openInputStream(uri) ?: return
-            val srcBitmap = BitmapFactory.decodeStream(inputStream)
-            inputStream.close()
+            val srcBitmap: Bitmap? = if (uriString == "preset:qraft_logo") {
+                val drawable = androidx.core.content.ContextCompat.getDrawable(context, com.example.R.drawable.ic_qraft_logo)
+                if (drawable != null) {
+                    val bmp = Bitmap.createBitmap(256, 256, Bitmap.Config.ARGB_8888)
+                    val c = Canvas(bmp)
+                    drawable.setBounds(0, 0, 256, 256)
+                    drawable.draw(c)
+                    bmp
+                } else null
+            } else {
+                val uri = Uri.parse(uriString)
+                val inputStream = context.contentResolver.openInputStream(uri)
+                val bmp = if (inputStream != null) {
+                    val b = BitmapFactory.decodeStream(inputStream)
+                    inputStream.close()
+                    b
+                } else null
+                bmp
+            }
             if (srcBitmap == null) return
 
             val logoSizePx = qrRect.width() * (sizePercent.coerceIn(10, 35) / 100f)

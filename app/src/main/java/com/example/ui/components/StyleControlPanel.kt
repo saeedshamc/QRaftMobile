@@ -4,6 +4,7 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -55,9 +56,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.R
 import com.example.domain.model.ColorPalettePreset
 import com.example.domain.model.ColorPalettes
 import com.example.domain.model.DotStyle
@@ -414,11 +417,35 @@ fun StyleControlPanel(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
+                // Preset Logo Options
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
+                    val isQRaftLogo = style.logoUri == "preset:qraft_logo"
+                    FilterChip(
+                        selected = isQRaftLogo,
+                        onClick = {
+                            if (isQRaftLogo) {
+                                onStyleChange { it.copy(logoUri = null) }
+                            } else {
+                                onStyleChange { it.copy(logoUri = "preset:qraft_logo", errorCorrection = ErrorCorrection.H) }
+                            }
+                        },
+                        leadingIcon = {
+                            Box(modifier = Modifier.size(20.dp).clip(RoundedCornerShape(4.dp))) {
+                                Image(
+                                    painter = painterResource(id = R.drawable.ic_qraft_logo),
+                                    contentDescription = "QRaft Logo",
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        },
+                        label = { Text("QRaft Logo", fontWeight = if (isQRaftLogo) FontWeight.Bold else FontWeight.Normal) },
+                        modifier = Modifier.weight(1f)
+                    )
+
                     FilledTonalButton(
                         onClick = { logoPickerLauncher.launch("image/*") },
                         modifier = Modifier.weight(1f)
@@ -429,7 +456,7 @@ fun StyleControlPanel(
                             modifier = Modifier.padding(end = 6.dp)
                         )
                         Text(
-                            text = if (style.logoUri == null) Strings.get("choose_logo", language) else "Replace Logo",
+                            text = if (style.logoUri != null && !isQRaftLogo) "Change" else Strings.get("choose_logo", language),
                             style = MaterialTheme.typography.labelMedium
                         )
                     }

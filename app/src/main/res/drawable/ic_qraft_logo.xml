@@ -1,0 +1,203 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="128dp"
+    android:height="128dp"
+    android:viewportWidth="128"
+    android:viewportHeight="128">
+
+    <!-- Background Rounded Squircle with Deep Gradient -->
+    <path
+        android:pathData="M24,4 H104 A20,20 0 0,1 124,24 V104 A20,20 0 0,1 104,124 H24 A20,20 0 0,1 4,104 V24 A20,20 0 0,1 24,4 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="4"
+                android:startY="4"
+                android:endX="124"
+                android:endY="124"
+                android:type="linear">
+                <item android:color="#FF0F172A" android:offset="0.0" />
+                <item android:color="#FF1E1B4B" android:offset="0.5" />
+                <item android:color="#FF0F172A" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Subtle Inner Border / Glow -->
+    <path
+        android:pathData="M24,6 H104 A18,18 0 0,1 122,24 V104 A18,18 0 0,1 104,122 H24 A18,18 0 0,1 6,104 V24 A18,18 0 0,1 24,6 Z"
+        android:strokeWidth="1.5">
+        <aapt:attr name="android:strokeColor">
+            <gradient
+                android:startX="6"
+                android:startY="6"
+                android:endX="122"
+                android:endY="122"
+                android:type="linear">
+                <item android:color="#8038BDF8" android:offset="0.0" />
+                <item android:color="#40818CF8" android:offset="0.5" />
+                <item android:color="#10C084FC" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Top-Left Finder Eye (Outer Rounded Frame) -->
+    <path
+        android:pathData="M24,20 H48 A6,6 0 0,1 54,26 V50 A6,6 0 0,1 48,56 H24 A6,6 0 0,1 18,50 V26 A6,6 0 0,1 24,20 Z
+                          M26,28 V48 H46 V28 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="18"
+                android:startY="20"
+                android:endX="54"
+                android:endY="56"
+                android:type="linear">
+                <item android:color="#FF06B6D4" android:offset="0.0" />
+                <item android:color="#FF6366F1" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Top-Left Finder Eye (Inner Core Dot) -->
+    <path
+        android:pathData="M32,32 H40 A3,3 0 0,1 43,35 V43 A3,3 0 0,1 40,46 H32 A3,3 0 0,1 29,43 V35 A3,3 0 0,1 32,32 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="29"
+                android:startY="32"
+                android:endX="43"
+                android:endY="46"
+                android:type="linear">
+                <item android:color="#FF38BDF8" android:offset="0.0" />
+                <item android:color="#FF818CF8" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Top-Right Finder Eye (Outer Rounded Frame) -->
+    <path
+        android:pathData="M80,20 H104 A6,6 0 0,1 110,26 V50 A6,6 0 0,1 104,56 H80 A6,6 0 0,1 74,50 V26 A6,6 0 0,1 80,20 Z
+                          M82,28 V48 H102 V28 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="74"
+                android:startY="20"
+                android:endX="110"
+                android:endY="56"
+                android:type="linear">
+                <item android:color="#FF6366F1" android:offset="0.0" />
+                <item android:color="#FF8B5CF6" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Top-Right Finder Eye (Inner Core Dot) -->
+    <path
+        android:pathData="M88,32 H96 A3,3 0 0,1 99,35 V43 A3,3 0 0,1 96,46 H88 A3,3 0 0,1 85,43 V35 A3,3 0 0,1 88,32 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="85"
+                android:startY="32"
+                android:endX="99"
+                android:endY="46"
+                android:type="linear">
+                <item android:color="#FF818CF8" android:offset="0.0" />
+                <item android:color="#FFA78BFA" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Bottom-Left Finder Eye (Outer Rounded Frame) -->
+    <path
+        android:pathData="M24,76 H48 A6,6 0 0,1 54,82 V106 A6,6 0 0,1 48,112 H24 A6,6 0 0,1 18,106 V82 A6,6 0 0,1 24,76 Z
+                          M26,84 V104 H46 V84 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="18"
+                android:startY="76"
+                android:endX="54"
+                android:endY="112"
+                android:type="linear">
+                <item android:color="#FF06B6D4" android:offset="0.0" />
+                <item android:color="#FF10B981" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Bottom-Left Finder Eye (Inner Core Dot) -->
+    <path
+        android:pathData="M32,88 H40 A3,3 0 0,1 43,91 V99 A3,3 0 0,1 40,102 H32 A3,3 0 0,1 29,99 V91 A3,3 0 0,1 32,88 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="29"
+                android:startY="88"
+                android:endX="43"
+                android:endY="102"
+                android:type="linear">
+                <item android:color="#FF34D399" android:offset="0.0" />
+                <item android:color="#FF2DD4BF" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Stylized "Q" Center Matrix & Flowing Tail -->
+    <!-- Central Hexagonal / Round Q Loop -->
+    <path
+        android:pathData="M64,48 C52,48 44,56 44,68 C44,80 52,88 64,88 C70,88 75,85 79,81 L86,88 L92,82 L85,75 C87,71 88,68 88,68 C88,56 76,48 64,48 Z
+                          M64,56 C72,56 80,61 80,68 C80,72 78,76 75,78 L71,74 L65,80 C65,80 64,80 64,80 C56,80 52,74 52,68 C52,61 56,56 64,56 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="44"
+                android:startY="48"
+                android:endX="92"
+                android:endY="88"
+                android:type="linear">
+                <item android:color="#FF38BDF8" android:offset="0.0" />
+                <item android:color="#FF818CF8" android:offset="0.5" />
+                <item android:color="#FFC084FC" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Q Craft Tail (Dynamic Diamond Spark / Arrow) -->
+    <path
+        android:pathData="M84,84 L96,96 L104,88 L92,76 Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:startX="84"
+                android:startY="76"
+                android:endX="104"
+                android:endY="96"
+                android:type="linear">
+                <item android:color="#FFA855F7" android:offset="0.0" />
+                <item android:color="#FFEC4899" android:offset="1.0" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Matrix Data Dots (High-Tech Accents) -->
+    <!-- Top Center Node -->
+    <path
+        android:pathData="M60,22 H68 A3,3 0 0,1 71,25 V33 A3,3 0 0,1 68,36 H60 A3,3 0 0,1 57,33 V25 A3,3 0 0,1 60,22 Z"
+        android:fillColor="#FF818CF8" />
+
+    <!-- Center-Right Node -->
+    <path
+        android:pathData="M98,60 H106 A3,3 0 0,1 109,63 V71 A3,3 0 0,1 106,74 H98 A3,3 0 0,1 95,71 V63 A3,3 0 0,1 98,60 Z"
+        android:fillColor="#FFC084FC" />
+
+    <!-- Bottom Center Node -->
+    <path
+        android:pathData="M60,98 H68 A3,3 0 0,1 71,101 V109 A3,3 0 0,1 68,112 H60 A3,3 0 0,1 57,109 V101 A3,3 0 0,1 60,98 Z"
+        android:fillColor="#FF2DD4BF" />
+
+    <!-- Sparkle Diamond Accent (Top Right) -->
+    <path
+        android:pathData="M64,38 L67,42 L71,42 L68,45 L69,49 L64,47 L59,49 L60,45 L57,42 L61,42 Z"
+        android:fillColor="#FF38BDF8" />
+
+    <!-- Sparkle Accent (Bottom Right Glow) -->
+    <path
+        android:pathData="M102,102 L105,106 L109,106 L106,109 L107,113 L102,111 L97,113 L98,109 L95,106 L99,106 Z"
+        android:fillColor="#FFF472B6" />
+
+</vector>

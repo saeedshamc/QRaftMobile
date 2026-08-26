@@ -87,6 +87,35 @@ object QRSvgExporter {
             }
         }
 
+        // Center Logo
+        if (style.logoUri != null) {
+            val logoSize = size * (style.logoSizePercent.coerceIn(10, 35) / 100f)
+            val cx = size / 2f
+            val cy = qrTop + size / 2f
+            val badgeMargin = logoSize * 0.14f
+            val badgeSize = logoSize + badgeMargin * 2f
+            val badgeX = cx - badgeSize / 2f
+            val badgeY = cy - badgeSize / 2f
+            val badgeR = badgeSize * 0.22f
+
+            val badgeBg = String.format("#%06X", (0xFFFFFF and style.bgColor.toInt()))
+            sb.append("""<rect x="$badgeX" y="$badgeY" width="$badgeSize" height="$badgeSize" rx="$badgeR" ry="$badgeR" fill="$badgeBg" stroke="#22000000" stroke-width="2" />""").append("\n")
+
+            if (style.logoUri == "preset:qraft_logo") {
+                val logoX = cx - logoSize / 2f
+                val logoY = cy - logoSize / 2f
+                val logoR = logoSize * 0.2f
+                sb.append("""<g transform="translate($logoX, $logoY)">""").append("\n")
+                sb.append("""  <rect width="$logoSize" height="$logoSize" rx="$logoR" ry="$logoR" fill="#0F172A" />""").append("\n")
+                sb.append("""  <circle cx="${logoSize * 0.35f}" cy="${logoSize * 0.35f}" r="${logoSize * 0.12f}" fill="#38BDF8" />""").append("\n")
+                sb.append("""  <circle cx="${logoSize * 0.65f}" cy="${logoSize * 0.35f}" r="${logoSize * 0.12f}" fill="#818CF8" />""").append("\n")
+                sb.append("""  <circle cx="${logoSize * 0.35f}" cy="${logoSize * 0.65f}" r="${logoSize * 0.12f}" fill="#34D399" />""").append("\n")
+                sb.append("""  <circle cx="${logoSize * 0.55f}" cy="${logoSize * 0.55f}" r="${logoSize * 0.22f}" fill="none" stroke="#C084FC" stroke-width="${logoSize * 0.08f}" />""").append("\n")
+                sb.append("""  <polygon points="${logoSize * 0.65f},${logoSize * 0.65f} ${logoSize * 0.85f},${logoSize * 0.85f} ${logoSize * 0.75f},${logoSize * 0.9f} ${logoSize * 0.6f},${logoSize * 0.75f}" fill="#EC4899" />""").append("\n")
+                sb.append("""</g>""").append("\n")
+            }
+        }
+
         // Frame
         if (hasFrame) {
             val bannerY = if (isTop) 6f else (totalHeight - frameHeight + 6f)
