@@ -8,11 +8,7 @@ import android.util.Base64
 import com.example.domain.model.DotStyle
 import com.example.domain.model.ErrorCorrection
 import com.example.domain.model.QRStyle
-import com.google.zxing.BinaryBitmap
-import com.google.zxing.MultiFormatReader
-import com.google.zxing.RGBLuminanceSource
-import com.google.zxing.common.HybridBinarizer
-import java.io.ByteArrayInputStream
+import java.io.BufferedOutputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
@@ -65,6 +61,10 @@ object AnimatedQREngine {
             .joinToString("")
     }
 
+    /**
+     * Encodes an image from URI into a sequence of animated QR frames.
+     * Uses bounds-only pre-decoding and sub-sampling to prevent out-of-memory errors on large images.
+     */
     fun encodeImageToFrames(
         context: Context,
         imageUri: Uri,
@@ -73,12 +73,37 @@ object AnimatedQREngine {
         reliabilityPreset: ReliabilityPreset = ReliabilityPreset.BALANCED
     ): AnimatedEncodeResult? {
         return try {
-            val inputStream = context.contentResolver.openInputStream(imageUri) ?: return null
-            val srcBitmap = BitmapFactory.decodeStream(inputStream)
-            inputStream.close()
-            if (srcBitmap == null) return null
+            // 1. Read image bounds first without allocating full bitmap memory
+            val boundsOptions = BitmapFactory.Options().apply {
+                inJustDecodeBounds = true
+            }
+            context.contentResolver.openInputStream(imageUri)?.use { input ->
+                BitmapFactory.decodeStream(input, null, boundsOptions)
+            } ?: return null
 
-            encodeBitmapToFrames(srcBitmap, maxDimension, quality, reliabilityPreset)
+            val origW = boundsOptions.outWidth
+            val origH = boundsOptions.outHeight
+            if (origW <= 0 || origH <= 0) return null
+
+            // 2. Compute inSampleSize to downscale at decode time
+            var sampleSize = 1
+            val targetSize = maxDimension * 2 // Downscale safely to close to maxDimension
+            while (origW / (sampleSize * 2) >= targetSize && origH / (sampleSize * 2) >= targetSize) {
+                sampleSize *= 2
+            }
+
+            // 3. Decode sub-sampled bitmap with RGB_565 (50% memory savings)
+            val decodeOptions = BitmapFactory.Options().apply {
+                inSampleSize = sampleSize
+                inPreferredConfig = Bitmap.Config.RGB_565
+            }
+            val srcBitmap = context.contentResolver.openInputStream(imageUri)?.use { input ->
+                BitmapFactory.decodeStream(input, null, decodeOptions)
+            } ?: return null
+
+            val result = encodeBitmapToFrames(srcBitmap, maxDimension, quality, reliabilityPreset)
+            srcBitmap.recycle()
+            result
         } catch (e: Exception) {
             e.printStackTrace()
             null
@@ -109,6 +134,9 @@ object AnimatedQREngine {
             val baos = ByteArrayOutputStream()
             val jpegQuality = (quality.coerceIn(0.1f, 1.0f) * 100).toInt()
             scaledBitmap.compress(Bitmap.CompressFormat.JPEG, jpegQuality, baos)
+            if (scaledBitmap !== srcBitmap) {
+                scaledBitmap.recycle()
+            }
             val jpegBytes = baos.toByteArray()
 
             // Base64 encode without newlines
@@ -120,9 +148,10 @@ object AnimatedQREngine {
             val chunks = base64Payload.chunked(chunkSize)
             val totalChunks = chunks.size
 
+            // Generate crisp 320x320 QR frames (minimal heap consumption)
             val style = QRStyle(
                 errorCorrection = ErrorCorrection.M,
-                sizePx = 380,
+                sizePx = 320,
                 dotStyle = DotStyle.SQUARE,
                 margin = 2
             )
@@ -132,7 +161,7 @@ object AnimatedQREngine {
                 val chunk = chunks[i]
                 val chunkCrcHex = CRC32Helper.computeHex(chunk)
                 val payloadString = "Q1|$sessionId|$i|$totalChunks|$chunkCrcHex|$totalCrc32Hex|$chunk"
-                val qrBitmap = QRGeneratorEngine.generateQRBitmap(payloadString, style, null, 380) ?: continue
+                val qrBitmap = QRGeneratorEngine.generateQRBitmap(payloadString, style, null, 320) ?: continue
                 frames.add(EncodedQRFrame(i, totalChunks, payloadString, qrBitmap))
             }
 
@@ -246,48 +275,138 @@ object AnimatedQREngine {
     }
 
     /**
-     * Export all frames as a single ZIP archive
+     * Automated cleanup utility to remove temporary frame files, zip archives,
+     * and partial GIF files from cache directory.
      */
-    fun exportFramesToZip(context: Context, frames: List<EncodedQRFrame>, sessionId: String): File? {
+    fun cleanupTemporaryFiles(context: Context, olderThanMs: Long = 0L): Int {
+        var deletedCount = 0
+        try {
+            val cacheDir = context.cacheDir ?: return 0
+            val now = System.currentTimeMillis()
+            val files = cacheDir.listFiles() ?: return 0
+            for (file in files) {
+                val name = file.name
+                val isQraftTemp = name.startsWith("qraft_animated_") ||
+                        name.startsWith("qraft_temp_") ||
+                        name.startsWith("qraft_frame_") ||
+                        name.startsWith("frame_") ||
+                        name.endsWith(".tmp") ||
+                        name.endsWith(".partial")
+                if (isQraftTemp) {
+                    if (olderThanMs <= 0L || (now - file.lastModified() > olderThanMs)) {
+                        if (file.delete()) {
+                            deletedCount++
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+        return deletedCount
+    }
+
+    /**
+     * Export all frames as a single ZIP archive using streaming buffers
+     */
+    fun exportFramesToZip(
+        context: Context,
+        frames: List<EncodedQRFrame>,
+        sessionId: String,
+        onProgress: ((current: Int, total: Int) -> Unit)? = null,
+        isCancelled: (() -> Boolean)? = null
+    ): File? {
+        val zipFile = File(context.cacheDir, "qraft_animated_${sessionId}.zip")
         return try {
-            val zipFile = File(context.cacheDir, "qraft_animated_${sessionId}.zip")
-            val zos = ZipOutputStream(FileOutputStream(zipFile))
-            for (frame in frames) {
+            val zos = ZipOutputStream(BufferedOutputStream(FileOutputStream(zipFile), 65536))
+            for (i in frames.indices) {
+                if (isCancelled?.invoke() == true) {
+                    zos.close()
+                    zipFile.delete()
+                    return null
+                }
+                val frame = frames[i]
                 val entry = ZipEntry("frame_${String.format("%03d", frame.index + 1)}_of_${frame.total}.png")
                 zos.putNextEntry(entry)
                 val baos = ByteArrayOutputStream()
                 frame.qrBitmap.compress(Bitmap.CompressFormat.PNG, 100, baos)
                 zos.write(baos.toByteArray())
                 zos.closeEntry()
+                onProgress?.invoke(i + 1, frames.size)
             }
             zos.flush()
             zos.close()
             zipFile
         } catch (e: Exception) {
             e.printStackTrace()
+            zipFile.delete()
             null
         }
     }
 
     /**
-     * Export all frames as a single animated GIF file
+     * Export all frames as a single animated GIF file using a streaming buffer pipeline.
+     * Uses downscaling for input frames (300x300 px) to minimize memory heap usage and maximize stability.
+     * Includes progress reporting and cancellation support with automated cleanup of partial files.
      */
-    fun exportFramesToGif(context: Context, frames: List<EncodedQRFrame>, sessionId: String, fps: Int): File? {
+    fun exportFramesToGif(
+        context: Context,
+        frames: List<EncodedQRFrame>,
+        sessionId: String,
+        delayMs: Int = 200,
+        targetDimension: Int = 300,
+        onProgress: ((current: Int, total: Int) -> Unit)? = null,
+        isCancelled: (() -> Boolean)? = null
+    ): File? {
+        if (frames.isEmpty()) return null
+        val gifFile = File(context.cacheDir, "qraft_animated_${sessionId}.gif")
+
         return try {
-            val gifFile = File(context.cacheDir, "qraft_animated_${sessionId}.gif")
-            val fos = FileOutputStream(gifFile)
-            val encoder = GifEncoder()
-            val delayMs = (1000 / fps.coerceIn(1, 20))
-            encoder.setDelay(delayMs)
-            encoder.setRepeat(0) // loop forever
-            for (f in frames) {
-                encoder.addFrame(f.qrBitmap)
+            val bos = BufferedOutputStream(FileOutputStream(gifFile), 65536) // 64KB streaming buffer
+            val encoder = StreamingGifEncoder()
+            val safeDelay = delayMs.coerceIn(50, 2000)
+
+            val outWidth = targetDimension
+            val outHeight = targetDimension
+
+            if (!encoder.start(bos, outWidth, outHeight, safeDelay)) {
+                bos.close()
+                gifFile.delete()
+                return null
             }
-            encoder.encode(fos)
-            fos.close()
-            gifFile
+
+            for (i in frames.indices) {
+                if (isCancelled?.invoke() == true) {
+                    encoder.finish()
+                    bos.close()
+                    gifFile.delete()
+                    return null
+                }
+
+                val frame = frames[i]
+                val bmp = frame.qrBitmap
+                val scaledBmp = if (bmp.width != outWidth || bmp.height != outHeight) {
+                    Bitmap.createScaledBitmap(bmp, outWidth, outHeight, false)
+                } else {
+                    bmp
+                }
+
+                encoder.addFrame(scaledBmp, safeDelay)
+                if (scaledBmp !== bmp) {
+                    scaledBmp.recycle()
+                }
+
+                onProgress?.invoke(i + 1, frames.size)
+            }
+
+            encoder.finish()
+            bos.flush()
+            bos.close()
+
+            if (gifFile.exists() && gifFile.length() > 0) gifFile else null
         } catch (e: Exception) {
             e.printStackTrace()
+            gifFile.delete()
             null
         }
     }

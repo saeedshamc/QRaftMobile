@@ -12,6 +12,8 @@ import android.widget.Toast
 import androidx.core.content.FileProvider
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.isActive
 import com.example.data.local.AppDatabase
 import com.example.data.local.entity.BatchSessionEntity
 import com.example.data.local.entity.QRHistoryEntity
@@ -181,12 +183,21 @@ class MainViewModel(
     val animMaxDim = MutableStateFlow(220)
     val animQuality = MutableStateFlow(0.55f)
     val animReliabilityPreset = MutableStateFlow(ReliabilityPreset.BALANCED)
+    val animFrameDelayMs = MutableStateFlow(200)
     val animFps = MutableStateFlow(5)
     val animIsPlaying = MutableStateFlow(true)
     val animLoop = MutableStateFlow(true)
     val animCurrentFrameIndex = MutableStateFlow(0)
     private val _animEncodeResult = MutableStateFlow<AnimatedEncodeResult?>(null)
     val animEncodeResult: StateFlow<AnimatedEncodeResult?> = _animEncodeResult.asStateFlow()
+
+    // Animated GIF Export Progress & Preview State
+    val isGifExporting = MutableStateFlow(false)
+    val gifExportProgress = MutableStateFlow(0f)
+    val gifExportCurrentFrame = MutableStateFlow(0)
+    val gifExportTotalFrames = MutableStateFlow(0)
+    val showSequencePreviewDialog = MutableStateFlow(false)
+    private var gifExportJob: Job? = null
 
     // Animated QR Decode State
     private val _animDecodeState = MutableStateFlow(DecodeSessionState())
@@ -697,34 +708,96 @@ class MainViewModel(
         }
     }
 
+    fun setAnimFrameDelayMs(delayMs: Int) {
+        val safe = delayMs.coerceIn(50, 1000)
+        animFrameDelayMs.value = safe
+        animFps.value = (1000 / safe).coerceIn(1, 20)
+    }
+
+    fun setAnimFps(fps: Int) {
+        val safeFps = fps.coerceIn(1, 20)
+        animFps.value = safeFps
+        animFrameDelayMs.value = (1000 / safeFps).coerceIn(50, 1000)
+    }
+
+    fun cleanupTempCache(context: Context) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val count = AnimatedQREngine.cleanupTemporaryFiles(context, 0L)
+            withContext(Dispatchers.Main) {
+                showToast(context, Strings.get("cache_cleared", _language.value))
+            }
+        }
+    }
+
+    fun cancelGifExport(context: Context) {
+        gifExportJob?.cancel()
+        gifExportJob = null
+        isGifExporting.value = false
+        gifExportProgress.value = 0f
+        viewModelScope.launch(Dispatchers.IO) {
+            AnimatedQREngine.cleanupTemporaryFiles(context, 0L)
+            withContext(Dispatchers.Main) {
+                showToast(context, Strings.get("export_cancelled", _language.value))
+            }
+        }
+    }
+
     fun exportAnimatedGif(context: Context) {
         val result = _animEncodeResult.value ?: run {
             showToast(context, "No animated frames available.")
             return
         }
-        viewModelScope.launch(Dispatchers.IO) {
-            withContext(Dispatchers.Main) {
-                showToast(context, Strings.get("generating_progress", _language.value))
-            }
-            val file = AnimatedQREngine.exportFramesToGif(
-                context = context,
-                frames = result.frames,
-                sessionId = result.sessionId,
-                fps = animFps.value
-            )
-            if (file != null && file.exists() && file.length() > 0) {
-                val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-                val intent = Intent(Intent.ACTION_SEND).apply {
-                    type = "image/gif"
-                    putExtra(Intent.EXTRA_STREAM, uri)
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }
-                val chooser = Intent.createChooser(intent, "Export Animated GIF")
-                chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                context.startActivity(chooser)
-            } else {
+        if (isGifExporting.value) return
+
+        isGifExporting.value = true
+        gifExportProgress.value = 0f
+        gifExportCurrentFrame.value = 0
+        gifExportTotalFrames.value = result.frames.size
+
+        gifExportJob = viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val file = AnimatedQREngine.exportFramesToGif(
+                    context = context,
+                    frames = result.frames,
+                    sessionId = result.sessionId,
+                    delayMs = animFrameDelayMs.value,
+                    onProgress = { cur, total ->
+                        gifExportCurrentFrame.value = cur
+                        gifExportTotalFrames.value = total
+                        gifExportProgress.value = if (total > 0) cur.toFloat() / total else 0f
+                    },
+                    isCancelled = { !isActive }
+                )
+
+                // Cleanup stale temp files (> 3 minutes old) to keep cache lean
+                AnimatedQREngine.cleanupTemporaryFiles(context, 180_000L)
+
                 withContext(Dispatchers.Main) {
-                    showToast(context, "Failed to export GIF")
+                    isGifExporting.value = false
+                    if (file != null && file.exists() && file.length() > 0) {
+                        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+                        val intent = Intent(Intent.ACTION_SEND).apply {
+                            type = "image/gif"
+                            putExtra(Intent.EXTRA_STREAM, uri)
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        val chooser = Intent.createChooser(intent, "Export Animated GIF")
+                        chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        context.startActivity(chooser)
+                    } else {
+                        showToast(context, "Failed to export GIF")
+                    }
+                }
+            } catch (e: CancellationException) {
+                AnimatedQREngine.cleanupTemporaryFiles(context, 0L)
+            } catch (e: Exception) {
+                withContext(Dispatchers.Main) {
+                    isGifExporting.value = false
+                    showToast(context, "Export error: ${e.localizedMessage}")
+                }
+            } finally {
+                withContext(Dispatchers.Main) {
+                    isGifExporting.value = false
                 }
             }
         }
