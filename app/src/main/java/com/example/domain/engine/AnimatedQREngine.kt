@@ -279,31 +279,7 @@ object AnimatedQREngine {
      * and partial GIF files from cache directory.
      */
     fun cleanupTemporaryFiles(context: Context, olderThanMs: Long = 0L): Int {
-        var deletedCount = 0
-        try {
-            val cacheDir = context.cacheDir ?: return 0
-            val now = System.currentTimeMillis()
-            val files = cacheDir.listFiles() ?: return 0
-            for (file in files) {
-                val name = file.name
-                val isQraftTemp = name.startsWith("qraft_animated_") ||
-                        name.startsWith("qraft_temp_") ||
-                        name.startsWith("qraft_frame_") ||
-                        name.startsWith("frame_") ||
-                        name.endsWith(".tmp") ||
-                        name.endsWith(".partial")
-                if (isQraftTemp) {
-                    if (olderThanMs <= 0L || (now - file.lastModified() > olderThanMs)) {
-                        if (file.delete()) {
-                            deletedCount++
-                        }
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-        return deletedCount
+        return AnimationCleanupWorker.triggerSyncCleanup(context, olderThanMs)
     }
 
     /**
@@ -323,6 +299,7 @@ object AnimatedQREngine {
                 if (isCancelled?.invoke() == true) {
                     zos.close()
                     zipFile.delete()
+                    AnimationCleanupWorker.triggerSyncCleanup(context, 0L)
                     return null
                 }
                 val frame = frames[i]
@@ -340,7 +317,10 @@ object AnimatedQREngine {
         } catch (e: Exception) {
             e.printStackTrace()
             zipFile.delete()
+            AnimationCleanupWorker.triggerSyncCleanup(context, 0L)
             null
+        } finally {
+            AnimationCleanupWorker.triggerSyncCleanup(context, 120_000L, zipFile)
         }
     }
 
@@ -366,12 +346,13 @@ object AnimatedQREngine {
             val encoder = StreamingGifEncoder()
             val safeDelay = delayMs.coerceIn(50, 2000)
 
-            val outWidth = targetDimension
-            val outHeight = targetDimension
+            val outWidth = targetDimension.coerceIn(120, StreamingGifEncoder.MAX_SAFE_DIMENSION)
+            val outHeight = targetDimension.coerceIn(120, StreamingGifEncoder.MAX_SAFE_DIMENSION)
 
             if (!encoder.start(bos, outWidth, outHeight, safeDelay)) {
                 bos.close()
                 gifFile.delete()
+                AnimationCleanupWorker.triggerSyncCleanup(context, 0L)
                 return null
             }
 
@@ -380,6 +361,7 @@ object AnimatedQREngine {
                     encoder.finish()
                     bos.close()
                     gifFile.delete()
+                    AnimationCleanupWorker.triggerSyncCleanup(context, 0L)
                     return null
                 }
 
@@ -403,11 +385,21 @@ object AnimatedQREngine {
             bos.flush()
             bos.close()
 
-            if (gifFile.exists() && gifFile.length() > 0) gifFile else null
+            if (gifFile.exists() && gifFile.length() > 0) {
+                gifFile
+            } else {
+                gifFile.delete()
+                AnimationCleanupWorker.triggerSyncCleanup(context, 0L)
+                null
+            }
         } catch (e: Exception) {
             e.printStackTrace()
             gifFile.delete()
+            AnimationCleanupWorker.triggerSyncCleanup(context, 0L)
             null
+        } finally {
+            // Trigger cleanup worker on export finish or failure to remove frame fragments
+            AnimationCleanupWorker.triggerSyncCleanup(context, 120_000L, gifFile)
         }
     }
 }

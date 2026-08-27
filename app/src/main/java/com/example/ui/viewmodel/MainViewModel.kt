@@ -23,6 +23,7 @@ import com.example.data.preferences.AppThemeMode
 import com.example.data.preferences.UserPreferences
 import com.example.domain.engine.AnimatedEncodeResult
 import com.example.domain.engine.AnimatedQREngine
+import com.example.domain.engine.AnimationCleanupWorker
 import com.example.domain.engine.CsvBatchParser
 import com.example.domain.engine.CsvBatchRow
 import com.example.domain.engine.CsvHistoryExporter
@@ -1180,7 +1181,7 @@ class MainViewModel(
 
     fun cleanupTempCache(context: Context) {
         viewModelScope.launch(Dispatchers.IO) {
-            val count = AnimatedQREngine.cleanupTemporaryFiles(context, 0L)
+            val report = AnimationCleanupWorker.cleanupFrameFragments(context, 0L)
             withContext(Dispatchers.Main) {
                 showToast(context, Strings.get("cache_cleared", _language.value))
             }
@@ -1193,7 +1194,7 @@ class MainViewModel(
         isGifExporting.value = false
         gifExportProgress.value = 0f
         viewModelScope.launch(Dispatchers.IO) {
-            AnimatedQREngine.cleanupTemporaryFiles(context, 0L)
+            AnimationCleanupWorker.cleanupFrameFragments(context, 0L)
             withContext(Dispatchers.Main) {
                 showToast(context, Strings.get("export_cancelled", _language.value))
             }
@@ -1213,8 +1214,9 @@ class MainViewModel(
         gifExportTotalFrames.value = result.frames.size
 
         gifExportJob = viewModelScope.launch(Dispatchers.IO) {
+            var exportedFile: File? = null
             try {
-                val file = AnimatedQREngine.exportFramesToGif(
+                exportedFile = AnimatedQREngine.exportFramesToGif(
                     context = context,
                     frames = result.frames,
                     sessionId = result.sessionId,
@@ -1227,13 +1229,10 @@ class MainViewModel(
                     isCancelled = { !isActive }
                 )
 
-                // Cleanup stale temp files (> 3 minutes old) to keep cache lean
-                AnimatedQREngine.cleanupTemporaryFiles(context, 180_000L)
-
                 withContext(Dispatchers.Main) {
                     isGifExporting.value = false
-                    if (file != null && file.exists() && file.length() > 0) {
-                        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+                    if (exportedFile != null && exportedFile.exists() && exportedFile.length() > 0) {
+                        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", exportedFile)
                         val intent = Intent(Intent.ACTION_SEND).apply {
                             type = "image/gif"
                             putExtra(Intent.EXTRA_STREAM, uri)
@@ -1247,13 +1246,15 @@ class MainViewModel(
                     }
                 }
             } catch (e: CancellationException) {
-                AnimatedQREngine.cleanupTemporaryFiles(context, 0L)
+                AnimationCleanupWorker.cleanupFrameFragments(context, 0L)
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
                     isGifExporting.value = false
                     showToast(context, "Export error: ${e.localizedMessage}")
                 }
             } finally {
+                // Post-export cleanup worker scan: purge temp frame fragments while preserving active export file
+                AnimationCleanupWorker.cleanupFrameFragments(context, 60_000L, preserveFile = exportedFile)
                 withContext(Dispatchers.Main) {
                     isGifExporting.value = false
                 }

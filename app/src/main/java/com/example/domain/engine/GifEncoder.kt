@@ -1,25 +1,45 @@
 package com.example.domain.engine
 
 import android.graphics.Bitmap
+import java.io.BufferedOutputStream
 import java.io.OutputStream
 import kotlin.math.max
+import kotlin.math.min
 
 /**
- * Memory-efficient, crash-safe streaming GIF89a encoder.
- * Streams each frame directly to an OutputStream buffer without storing
- * all bitmaps in memory at once.
+ * High-performance, memory-efficient, crash-safe streaming GIF89a encoder.
+ *
+ * Implements a buffer-based streaming pipeline that writes directly to an OutputStream
+ * without hoarding all frames in memory.
+ * Includes automatic input downscaling to maintain stability and prevent OOM crashes on large frames.
  */
 class StreamingGifEncoder {
+
+    companion object {
+        const val MAX_SAFE_DIMENSION = 360
+        const val DEFAULT_STREAM_BUFFER_SIZE = 65536 // 64 KB
+    }
+
     private var width = 0
     private var height = 0
     private var defaultDelayMs = 200
-    private var outputStream: OutputStream? = null
+    private var outputStream: BufferedOutputStream? = null
     private var isStarted = false
     private var frameCount = 0
 
-    // Reusable buffers to minimize GC allocations during multi-frame encoding
+    // Reusable buffers to minimize heap churn during frame processing
+    private var reusablePixelBuffer: IntArray? = null
+    private var reusableIndexedBuffer: ByteArray? = null
     private val lzwEncoder = LZWEncoder()
 
+    // Fast primitive color palette lookup table (avoids boxing thousands of Integer objects per frame)
+    private val colorKeys = IntArray(256)
+    private val colorPalette = IntArray(256)
+    private var paletteSize = 0
+
+    /**
+     * Initializes the GIF stream and writes header & logical screen descriptor.
+     */
     fun start(
         out: OutputStream,
         width: Int,
@@ -27,143 +47,191 @@ class StreamingGifEncoder {
         delayMs: Int = 200,
         repeatCount: Int = 0 // 0 = loop forever
     ): Boolean {
-        try {
-            this.outputStream = out
-            this.width = width
-            this.height = height
-            this.defaultDelayMs = delayMs
+        return try {
+            // Apply safe maximum dimension bounds to prevent massive allocations
+            val targetW = min(width, MAX_SAFE_DIMENSION).coerceAtLeast(64)
+            val targetH = min(height, MAX_SAFE_DIMENSION).coerceAtLeast(64)
+
+            this.outputStream = if (out is BufferedOutputStream) out else BufferedOutputStream(out, DEFAULT_STREAM_BUFFER_SIZE)
+            this.width = targetW
+            this.height = targetH
+            this.defaultDelayMs = delayMs.coerceIn(20, 5000)
             this.frameCount = 0
 
+            val stream = this.outputStream ?: return false
+
             // 1. GIF Header
-            writeString(out, "GIF89a")
+            writeString(stream, "GIF89a")
 
             // 2. Logical Screen Descriptor
-            writeShort(out, width)
-            writeShort(out, height)
-            out.write(0x70) // No Global Color Table, 8-bit color resolution
-            out.write(0)    // Background Color Index
-            out.write(0)    // Pixel Aspect Ratio
+            writeShort(stream, targetW)
+            writeShort(stream, targetH)
+            stream.write(0x70) // No Global Color Table, 8-bit color resolution
+            stream.write(0)    // Background Color Index
+            stream.write(0)    // Pixel Aspect Ratio
 
             // 3. Netscape Application Extension for Looping
             if (repeatCount >= 0) {
-                out.write(0x21) // Extension Introducer
-                out.write(0xFF) // Application Extension Label
-                out.write(11)   // Block Size
-                writeString(out, "NETSCAPE2.0")
-                out.write(3)    // Sub-block Length
-                out.write(1)    // Sub-block ID
-                writeShort(out, repeatCount)
-                out.write(0)    // Block Terminator
+                stream.write(0x21) // Extension Introducer
+                stream.write(0xFF) // Application Extension Label
+                stream.write(11)   // Block Size
+                writeString(stream, "NETSCAPE2.0")
+                stream.write(3)    // Sub-block Length
+                stream.write(1)    // Sub-block ID
+                writeShort(stream, repeatCount)
+                stream.write(0)    // Block Terminator
+            }
+
+            // Allocate or size reusable buffers once
+            val pixelCount = targetW * targetH
+            if (reusablePixelBuffer == null || reusablePixelBuffer!!.size < pixelCount) {
+                reusablePixelBuffer = IntArray(pixelCount)
+            }
+            if (reusableIndexedBuffer == null || reusableIndexedBuffer!!.size < pixelCount) {
+                reusableIndexedBuffer = ByteArray(pixelCount)
             }
 
             isStarted = true
-            return true
+            true
         } catch (e: Exception) {
             e.printStackTrace()
-            return false
+            false
         }
     }
 
+    /**
+     * Streams a single frame directly into the GIF output.
+     * Automatically downscales input bitmap if dimensions exceed target width/height.
+     */
     fun addFrame(bitmap: Bitmap, customDelayMs: Int? = null): Boolean {
         if (!isStarted || outputStream == null) return false
-        val out = outputStream ?: return false
+        val stream = outputStream ?: return false
 
+        var scaledBitmap: Bitmap? = null
         try {
             val frameDelay = customDelayMs ?: defaultDelayMs
-            val scaled = if (bitmap.width != width || bitmap.height != height) {
-                Bitmap.createScaledBitmap(bitmap, width, height, false)
+            val w = width
+            val h = height
+            val pixelCount = w * h
+
+            // 1. Downscale/Scale input bitmap if dimensions differ
+            val effectiveBitmap = if (bitmap.width != w || bitmap.height != h) {
+                scaledBitmap = Bitmap.createScaledBitmap(bitmap, w, h, true)
+                scaledBitmap
             } else {
                 bitmap
             }
 
-            val w = scaled.width
-            val h = scaled.height
-            val pixels = IntArray(w * h)
-            scaled.getPixels(pixels, 0, w, 0, 0, w, h)
+            val pixels = reusablePixelBuffer ?: IntArray(pixelCount).also { reusablePixelBuffer = it }
+            val indexedPixels = reusableIndexedBuffer ?: ByteArray(pixelCount).also { reusableIndexedBuffer = it }
 
-            if (scaled !== bitmap) {
-                scaled.recycle()
-            }
+            effectiveBitmap.getPixels(pixels, 0, w, 0, 0, w, h)
 
-            // Build Color Palette (max 256 colors for GIF)
-            val colorMap = LinkedHashMap<Int, Int>(64)
-            val indexedPixels = ByteArray(w * h)
+            // 2. Build Fast Color Palette without boxed HashMaps
+            paletteSize = 0
+            val maxColors = 256
 
-            for (i in pixels.indices) {
-                val c = pixels[i] and 0x00FFFFFF
-                var index = colorMap[c]
-                if (index == null) {
-                    if (colorMap.size < 256) {
-                        index = colorMap.size
-                        colorMap[c] = index
+            // Direct mapping with primitive hash table
+            val tableSize = 1024
+            val mask = tableSize - 1
+            val hashKeys = IntArray(tableSize) { -1 }
+            val hashValues = IntArray(tableSize) { -1 }
+
+            for (i in 0 until pixelCount) {
+                val color = pixels[i] and 0x00FFFFFF // Discard alpha for standard GIF palette
+                var hash = (color xor (color ushr 12)) and mask
+
+                var foundIndex = -1
+                while (hashKeys[hash] != -1) {
+                    if (hashKeys[hash] == color) {
+                        foundIndex = hashValues[hash]
+                        break
+                    }
+                    hash = (hash + 1) and mask
+                }
+
+                if (foundIndex == -1) {
+                    if (paletteSize < maxColors) {
+                        val newIdx = paletteSize++
+                        colorPalette[newIdx] = color
+                        hashKeys[hash] = color
+                        hashValues[hash] = newIdx
+                        foundIndex = newIdx
                     } else {
-                        index = 0
+                        // Nearest color fallback or default index 0
+                        foundIndex = 0
                     }
                 }
-                indexedPixels[i] = index.toByte()
+
+                indexedPixels[i] = foundIndex.toByte()
             }
 
+            // Determine bit depth of local color table
             var pSize = 2
-            while (pSize < colorMap.size && pSize < 256) {
+            while (pSize < paletteSize && pSize < 256) {
                 pSize = pSize shl 1
             }
             var paletteBits = 1
             while ((1 shl paletteBits) < pSize) {
                 paletteBits++
             }
-            if (paletteBits < 1) paletteBits = 1
+            paletteBits = paletteBits.coerceAtLeast(1)
 
-            // 4. Graphic Control Extension
-            out.write(0x21) // Extension Introducer
-            out.write(0xF9) // GCE Label
-            out.write(4)    // Block Size
-            out.write(0x00) // Disposal Method: unspecified, User Input: 0, Transparent: 0
-            writeShort(out, max(1, frameDelay / 10)) // Delay in 10ms units
-            out.write(0)    // Transparent Color Index
-            out.write(0)    // Block Terminator
+            // 3. Graphic Control Extension (Delay & disposal)
+            stream.write(0x21) // Extension Introducer
+            stream.write(0xF9) // GCE Label
+            stream.write(4)    // Block Size
+            stream.write(0x00) // Disposal Method: 0 (no disposal specified), User Input: 0, Transparent: 0
+            writeShort(stream, max(1, frameDelay / 10)) // Delay in hundredths of a second (10ms units)
+            stream.write(0)    // Transparent Color Index
+            stream.write(0)    // Block Terminator
 
-            // 5. Image Descriptor
-            out.write(0x2C) // Image Separator
-            writeShort(out, 0) // Left
-            writeShort(out, 0) // Top
-            writeShort(out, w) // Width
-            writeShort(out, h) // Height
-            // Local Color Table Flag (1), Interlace (0), Sort (0), Size of Local Table
-            out.write(0x80 or (paletteBits - 1))
+            // 4. Image Descriptor
+            stream.write(0x2C) // Image Separator
+            writeShort(stream, 0) // Left
+            writeShort(stream, 0) // Top
+            writeShort(stream, w) // Width
+            writeShort(stream, h) // Height
+            // Local Color Table Flag (0x80) | Table Size (paletteBits - 1)
+            stream.write(0x80 or (paletteBits - 1))
 
-            // 6. Local Color Table (RGB triplets)
-            val paletteEntries = colorMap.keys.toList()
+            // 5. Write Local Color Table (RGB triplets)
             for (i in 0 until pSize) {
-                if (i < paletteEntries.size) {
-                    val c = paletteEntries[i]
-                    out.write((c shr 16) and 0xFF) // Red
-                    out.write((c shr 8) and 0xFF)  // Green
-                    out.write(c and 0xFF)         // Blue
+                if (i < paletteSize) {
+                    val c = colorPalette[i]
+                    stream.write((c shr 16) and 0xFF) // Red
+                    stream.write((c shr 8) and 0xFF)  // Green
+                    stream.write(c and 0xFF)         // Blue
                 } else {
-                    out.write(0)
-                    out.write(0)
-                    out.write(0)
+                    stream.write(0)
+                    stream.write(0)
+                    stream.write(0)
                 }
             }
 
-            // 7. LZW Encoded Image Data
+            // 6. LZW Encode Pixel Data directly to output stream
             val initCodeSize = max(2, paletteBits)
-            lzwEncoder.encode(w, h, indexedPixels, initCodeSize, out)
+            lzwEncoder.encode(w, h, indexedPixels, initCodeSize, stream)
 
             frameCount++
             return true
         } catch (e: Exception) {
             e.printStackTrace()
             return false
+        } finally {
+            scaledBitmap?.recycle()
         }
     }
 
+    /**
+     * Finalizes GIF file by writing trailer byte and flushing stream.
+     */
     fun finish(): Boolean {
         if (!isStarted || outputStream == null) return false
         return try {
-            val out = outputStream!!
-            out.write(0x3B) // GIF Trailer
-            out.flush()
+            val stream = outputStream!!
+            stream.write(0x3B) // GIF Trailer (0x3B = ';')
+            stream.flush()
             isStarted = false
             true
         } catch (e: Exception) {
@@ -184,7 +252,7 @@ class StreamingGifEncoder {
     }
 
     /**
-     * Efficient LZW Image Encoder with reusable memory structures.
+     * High-speed, low-memory LZW encoder utilizing preallocated integer tables.
      */
     private class LZWEncoder {
         private val BITS = 12
@@ -201,8 +269,8 @@ class StreamingGifEncoder {
         private var freeEnt = 0
         private var clearFlg = false
         private var gInitBits = 0
-        private var ClearCode = 0
-        private var EOFCode = 0
+        private var clearCode = 0
+        private var eofCode = 0
         private var curAccum = 0
         private var curBits = 0
         private var aCount = 0
@@ -243,7 +311,7 @@ class StreamingGifEncoder {
                 }
             }
 
-            if (code == EOFCode) {
+            if (code == eofCode) {
                 while (curBits > 0) {
                     charOut((curAccum and 0xFF).toByte(), outs)
                     curAccum = curAccum shr 8
@@ -255,9 +323,9 @@ class StreamingGifEncoder {
 
         private fun clBlock(outs: OutputStream) {
             for (i in 0 until HSIZE) htab[i] = -1
-            freeEnt = ClearCode + 2
+            freeEnt = clearCode + 2
             clearFlg = true
-            output(ClearCode, outs)
+            output(clearCode, outs)
         }
 
         fun encode(
@@ -268,19 +336,20 @@ class StreamingGifEncoder {
             os: OutputStream
         ) {
             var curPixel = 0
+            val totalPixels = imgW * imgH
             os.write(initCodeSize)
             gInitBits = initCodeSize
             clearFlg = false
             nBits = gInitBits + 1
             maxcode = maxCode(nBits)
-            ClearCode = 1 shl gInitBits
-            EOFCode = ClearCode + 1
-            freeEnt = ClearCode + 2
+            clearCode = 1 shl gInitBits
+            eofCode = clearCode + 1
+            freeEnt = clearCode + 2
             aCount = 0
             curAccum = 0
             curBits = 0
 
-            var ent = if (curPixel < pixAry.size) pixAry[curPixel++].toInt() and 0xFF else -1
+            var ent = if (curPixel < totalPixels) pixAry[curPixel++].toInt() and 0xFF else -1
             var hshift = 0
             var fcode = HSIZE
             while (fcode < 65536) {
@@ -291,9 +360,9 @@ class StreamingGifEncoder {
 
             for (i in 0 until HSIZE) htab[i] = -1
 
-            output(ClearCode, os)
+            output(clearCode, os)
 
-            while (curPixel < pixAry.size) {
+            while (curPixel < totalPixels) {
                 val c = pixAry[curPixel++].toInt() and 0xFF
                 fcode = (c shl maxbits) + ent
                 var i = ((c shl hshift) xor ent) % HSIZE
@@ -332,8 +401,8 @@ class StreamingGifEncoder {
             if (ent != -1) {
                 output(ent, os)
             }
-            output(EOFCode, os)
-            os.write(0) // write block terminator 0x00
+            output(eofCode, os)
+            os.write(0) // Block terminator
         }
     }
 }
