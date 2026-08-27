@@ -27,13 +27,17 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.FolderZip
 import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Notes
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.TableChart
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -45,6 +49,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -72,6 +79,8 @@ fun BatchScreen(
     val progress by viewModel.batchProgress.collectAsState()
     val lastZipFile by viewModel.lastBatchZipFile.collectAsState()
     val recentBatches by viewModel.recentBatchSessions.collectAsState()
+
+    var batchFormatMode by remember { mutableStateOf(0) } // 0 = CSV, 1 = Plain Text
 
     val filePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -120,34 +129,7 @@ fun BatchScreen(
             }
         }
 
-        // CSV Import / Template Buttons
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            FilledTonalButton(
-                onClick = { filePickerLauncher.launch("*/*") },
-                modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Icon(imageVector = Icons.Default.UploadFile, contentDescription = null, modifier = Modifier.padding(end = 4.dp))
-                Text(Strings.get("import_csv", language), style = MaterialTheme.typography.labelMedium)
-            }
-
-            OutlinedButton(
-                onClick = {
-                    viewModel.batchCsvText.value = CsvBatchParser.SAMPLE_CSV
-                    viewModel.parseBatchCsv()
-                },
-                modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Icon(imageVector = Icons.Default.Description, contentDescription = null, modifier = Modifier.padding(end = 4.dp))
-                Text(Strings.get("sample_csv", language), style = MaterialTheme.typography.labelMedium)
-            }
-        }
-
-        // CSV Editor Card
+        // Format selector chips & import actions
         Card(
             modifier = Modifier.fillMaxWidth(),
             shape = RoundedCornerShape(20.dp),
@@ -155,7 +137,79 @@ fun BatchScreen(
         ) {
             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
-                    text = Strings.get("csv_content", language),
+                    text = Strings.get("batch_mode_label", language),
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FilterChip(
+                        selected = batchFormatMode == 0,
+                        onClick = {
+                            batchFormatMode = 0
+                            viewModel.loadSampleCsv()
+                        },
+                        label = { Text(Strings.get("batch_mode_csv", language)) },
+                        leadingIcon = { Icon(imageVector = Icons.Default.TableChart, contentDescription = null) },
+                        modifier = Modifier.weight(1f)
+                    )
+                    FilterChip(
+                        selected = batchFormatMode == 1,
+                        onClick = {
+                            batchFormatMode = 1
+                            viewModel.loadSamplePlainText()
+                        },
+                        label = { Text(Strings.get("batch_mode_text", language)) },
+                        leadingIcon = { Icon(imageVector = Icons.Default.Notes, contentDescription = null) },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FilledTonalButton(
+                        onClick = { filePickerLauncher.launch("*/*") },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(imageVector = Icons.Default.UploadFile, contentDescription = null, modifier = Modifier.padding(end = 4.dp))
+                        Text(
+                            if (batchFormatMode == 0) Strings.get("import_csv", language) else Strings.get("import_text", language),
+                            style = MaterialTheme.typography.labelMedium
+                        )
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            if (batchFormatMode == 0) viewModel.loadSampleCsv() else viewModel.loadSamplePlainText()
+                        },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(imageVector = Icons.Default.Description, contentDescription = null, modifier = Modifier.padding(end = 4.dp))
+                        Text(
+                            if (batchFormatMode == 0) Strings.get("sample_csv", language) else Strings.get("sample_text", language),
+                            style = MaterialTheme.typography.labelMedium
+                        )
+                    }
+                }
+            }
+        }
+
+        // Content Editor Card
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(20.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        ) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(
+                    text = if (batchFormatMode == 0) Strings.get("csv_content", language) else Strings.get("text_content_label", language),
                     style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
                 )
                 OutlinedTextField(

@@ -192,7 +192,8 @@ fun CreateScreen(
             style = qrStyle,
             language = language,
             onStyleChange = { viewModel.updateStyle(it) },
-            onApplyPalette = { viewModel.applyColorPalette(it) }
+            onApplyPalette = { viewModel.applyColorPalette(it) },
+            onApplyTemplate = { viewModel.applyDesignTemplate(it, context) }
         )
 
         Spacer(modifier = Modifier.height(24.dp))

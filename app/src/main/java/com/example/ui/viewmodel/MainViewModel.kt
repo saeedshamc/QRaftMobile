@@ -48,6 +48,8 @@ import com.example.domain.model.InstagramContent
 import com.example.domain.model.LocationContent
 import com.example.domain.model.PayPalContent
 import com.example.domain.model.PhoneContent
+import com.example.domain.model.QRDesignTemplate
+import com.example.domain.model.QRDesignTemplates
 import com.example.domain.model.QRStyle
 import com.example.domain.model.SmsContent
 import com.example.domain.model.TelegramContent
@@ -68,9 +70,13 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 enum class AppTab {
     CREATE,
@@ -253,6 +259,13 @@ class MainViewModel(
             activePaletteId = palette.id
         )
         triggerQRGeneration()
+    }
+
+    fun applyDesignTemplate(template: QRDesignTemplate, context: Context) {
+        _qrStyle.value = template.applyTo(_qrStyle.value)
+        triggerQRGeneration()
+        val templateName = if (_language.value == AppLanguage.FA) template.nameFa else template.nameEn
+        showToast(context, String.format(Strings.get("template_applied", _language.value), templateName))
     }
 
     fun onFormChanged() {
@@ -514,6 +527,111 @@ class MainViewModel(
         }
     }
 
+    /**
+     * Exports all local history items to a formatted JSON backup file
+     * and opens an intent to save/share to Google Drive, Dropbox, Local Storage, etc.
+     */
+    fun exportHistoryToJson(context: Context) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val items = historyList.value
+            val root = JSONObject()
+            root.put("appName", "QRaft Studio")
+            root.put("schemaVersion", 1)
+            root.put("exportedAt", SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date()))
+            root.put("totalRecords", items.size)
+
+            val array = JSONArray()
+            for (item in items) {
+                val itemObj = JSONObject().apply {
+                    put("id", item.id)
+                    put("content", item.content)
+                    put("contentType", item.contentType)
+                    put("label", item.label)
+                    put("notes", item.notes)
+                    put("styleJson", item.styleJson)
+                    put("timestamp", item.timestamp)
+                }
+                array.put(itemObj)
+            }
+            root.put("history", array)
+
+            val timestamp = System.currentTimeMillis()
+            val backupFile = File(context.cacheDir, "qraft_history_backup_${timestamp}.json")
+            backupFile.writeText(root.toString(2), Charsets.UTF_8)
+
+            withContext(Dispatchers.Main) {
+                try {
+                    val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", backupFile)
+                    val intent = Intent(Intent.ACTION_SEND).apply {
+                        type = "application/json"
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        putExtra(Intent.EXTRA_SUBJECT, "QRaft History Backup (JSON)")
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    val chooser = Intent.createChooser(intent, Strings.get("export_json_backup", _language.value))
+                    chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    context.startActivity(chooser)
+                    showToast(context, Strings.get("backup_export_success", _language.value))
+                } catch (e: Exception) {
+                    showToast(context, "Export error: ${e.localizedMessage}")
+                }
+            }
+        }
+    }
+
+    /**
+     * Imports history items from a user-selected JSON backup file.
+     */
+    fun importHistoryFromJson(context: Context, uri: Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val jsonString = context.contentResolver.openInputStream(uri)?.use { stream ->
+                    stream.bufferedReader(Charsets.UTF_8).readText()
+                } ?: throw IllegalArgumentException("Cannot open file stream")
+
+                val root = JSONObject(jsonString)
+                val historyArray = root.optJSONArray("history") ?: throw IllegalArgumentException("Missing 'history' JSON array")
+
+                var importedCount = 0
+                for (i in 0 until historyArray.length()) {
+                    val obj = historyArray.getJSONObject(i)
+                    val content = obj.optString("content")
+                    if (content.isNotBlank()) {
+                        val contentType = obj.optString("contentType", "TEXT")
+                        val label = obj.optString("label", "Restored QR")
+                        val notes = obj.optString("notes", "Imported from JSON backup")
+                        val styleJson = obj.optString("styleJson", "{}")
+                        val timestamp = obj.optLong("timestamp", System.currentTimeMillis())
+
+                        repository.addHistory(
+                            QRHistoryEntity(
+                                content = content,
+                                contentType = contentType,
+                                label = label,
+                                notes = notes,
+                                styleJson = styleJson,
+                                timestamp = timestamp
+                            )
+                        )
+                        importedCount++
+                    }
+                }
+
+                withContext(Dispatchers.Main) {
+                    showToast(
+                        context,
+                        String.format(Strings.get("backup_import_success", _language.value), importedCount)
+                    )
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                withContext(Dispatchers.Main) {
+                    showToast(context, "${Strings.get("backup_import_error", _language.value)}: ${e.localizedMessage}")
+                }
+            }
+        }
+    }
+
     fun clearAllLocalData(context: Context) {
         viewModelScope.launch(Dispatchers.IO) {
             repository.clearHistory()
@@ -638,6 +756,11 @@ class MainViewModel(
 
     fun loadSampleCsv() {
         batchCsvText.value = CsvBatchParser.SAMPLE_CSV
+        parseBatchCsv()
+    }
+
+    fun loadSamplePlainText() {
+        batchCsvText.value = CsvBatchParser.SAMPLE_PLAIN_TEXT
         parseBatchCsv()
     }
 

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -69,6 +70,8 @@ import com.example.domain.model.ErrorCorrection
 import com.example.domain.model.EyeFrameStyle
 import com.example.domain.model.EyeInnerStyle
 import com.example.domain.model.GradientType
+import com.example.domain.model.QRDesignTemplate
+import com.example.domain.model.QRDesignTemplates
 import com.example.domain.model.QRStyle
 import com.example.ui.i18n.AppLanguage
 import com.example.ui.i18n.Strings
@@ -79,6 +82,7 @@ fun StyleControlPanel(
     language: AppLanguage,
     onStyleChange: ((QRStyle) -> QRStyle) -> Unit,
     onApplyPalette: (ColorPalettePreset) -> Unit,
+    onApplyTemplate: (QRDesignTemplate) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val logoPickerLauncher = rememberLauncherForActivityResult(
@@ -147,6 +151,240 @@ fun StyleControlPanel(
                     ) {
                         Icon(imageVector = Icons.Default.Shield, contentDescription = null, tint = badgeColor, modifier = Modifier.size(14.dp))
                         Text(text = badgeText, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold), color = badgeColor)
+                    }
+                }
+            }
+
+            // 0. Predefined Design Templates Section
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = Strings.get("design_templates", language),
+                        style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = Strings.get("quick_styles", language),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    QRDesignTemplates.templates.forEach { template ->
+                        val isSelected = style.activePaletteId == template.id
+                        val name = if (language == AppLanguage.FA) template.nameFa else template.nameEn
+                        val desc = if (language == AppLanguage.FA) template.descriptionFa else template.descriptionEn
+
+                        Card(
+                            modifier = Modifier
+                                .width(140.dp)
+                                .clickable { onApplyTemplate(template) }
+                                .testTag("template_${template.id}"),
+                            shape = RoundedCornerShape(16.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
+                                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                            ),
+                            border = if (isSelected) androidx.compose.foundation.BorderStroke(
+                                2.dp,
+                                MaterialTheme.colorScheme.primary
+                            ) else null
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(10.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                // Miniature QR pattern representation preview
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(56.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(Color(template.bgColor.toInt()))
+                                        .padding(6.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    // Simulated stylized QR finder eyes and modules
+                                    Row(
+                                        modifier = Modifier.fillMaxSize(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(20.dp)
+                                                .clip(
+                                                    when (template.eyeFrameStyle) {
+                                                        EyeFrameStyle.CIRCLE -> CircleShape
+                                                        EyeFrameStyle.ROUNDED -> RoundedCornerShape(4.dp)
+                                                        EyeFrameStyle.LEAF -> RoundedCornerShape(topStart = 8.dp, bottomEnd = 8.dp)
+                                                        EyeFrameStyle.SQUARE -> RoundedCornerShape(0.dp)
+                                                    }
+                                                )
+                                                .background(
+                                                    if (template.gradientMode) Brush.linearGradient(
+                                                        listOf(
+                                                            Color(template.fgColor.toInt()),
+                                                            Color(template.gradientEndColor.toInt())
+                                                        )
+                                                    ) else Brush.linearGradient(
+                                                        listOf(
+                                                            Color(template.fgColor.toInt()),
+                                                            Color(template.fgColor.toInt())
+                                                        )
+                                                    )
+                                                )
+                                                .padding(3.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .background(Color(template.bgColor.toInt()))
+                                                    .padding(2.dp),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(6.dp)
+                                                        .clip(
+                                                            when (template.eyeInnerStyle) {
+                                                                EyeInnerStyle.DOT -> CircleShape
+                                                                EyeInnerStyle.ROUNDED -> RoundedCornerShape(2.dp)
+                                                                EyeInnerStyle.DIAMOND -> RoundedCornerShape(1.dp)
+                                                                EyeInnerStyle.SQUARE -> RoundedCornerShape(0.dp)
+                                                            }
+                                                        )
+                                                        .background(Color(template.fgColor.toInt()))
+                                                )
+                                            }
+                                        }
+
+                                        // Central dots
+                                        Column(
+                                            verticalArrangement = Arrangement.spacedBy(3.dp),
+                                            horizontalAlignment = Alignment.CenterHorizontally
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(6.dp)
+                                                    .clip(
+                                                        if (template.dotStyle == DotStyle.ROUNDED || template.dotStyle == DotStyle.DOTS) CircleShape
+                                                        else RoundedCornerShape(1.dp)
+                                                    )
+                                                    .background(Color(template.fgColor.toInt()))
+                                            )
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(6.dp)
+                                                    .clip(
+                                                        if (template.dotStyle == DotStyle.ROUNDED || template.dotStyle == DotStyle.DOTS) CircleShape
+                                                        else RoundedCornerShape(1.dp)
+                                                    )
+                                                    .background(Color(template.gradientEndColor.toInt()))
+                                            )
+                                        }
+
+                                        // Top right eye
+                                        Box(
+                                            modifier = Modifier
+                                                .size(20.dp)
+                                                .clip(
+                                                    when (template.eyeFrameStyle) {
+                                                        EyeFrameStyle.CIRCLE -> CircleShape
+                                                        EyeFrameStyle.ROUNDED -> RoundedCornerShape(4.dp)
+                                                        EyeFrameStyle.LEAF -> RoundedCornerShape(topStart = 8.dp, bottomEnd = 8.dp)
+                                                        EyeFrameStyle.SQUARE -> RoundedCornerShape(0.dp)
+                                                    }
+                                                )
+                                                .background(
+                                                    if (template.gradientMode) Brush.linearGradient(
+                                                        listOf(
+                                                            Color(template.fgColor.toInt()),
+                                                            Color(template.gradientEndColor.toInt())
+                                                        )
+                                                    ) else Brush.linearGradient(
+                                                        listOf(
+                                                            Color(template.fgColor.toInt()),
+                                                            Color(template.fgColor.toInt())
+                                                        )
+                                                    )
+                                                )
+                                                .padding(3.dp),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .background(Color(template.bgColor.toInt()))
+                                                    .padding(2.dp),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(6.dp)
+                                                        .clip(
+                                                            when (template.eyeInnerStyle) {
+                                                                EyeInnerStyle.DOT -> CircleShape
+                                                                EyeInnerStyle.ROUNDED -> RoundedCornerShape(2.dp)
+                                                                EyeInnerStyle.DIAMOND -> RoundedCornerShape(1.dp)
+                                                                EyeInnerStyle.SQUARE -> RoundedCornerShape(0.dp)
+                                                            }
+                                                        )
+                                                        .background(Color(template.fgColor.toInt()))
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = name,
+                                        style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                        maxLines = 1,
+                                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+                                    )
+                                    if (isSelected) {
+                                        Icon(
+                                            imageVector = Icons.Default.Check,
+                                            contentDescription = "Selected",
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+
+                                Surface(
+                                    shape = RoundedCornerShape(4.dp),
+                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                                ) {
+                                    Text(
+                                        text = template.badge,
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            fontSize = 9.sp,
+                                            fontWeight = FontWeight.Bold
+                                        ),
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
