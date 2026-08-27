@@ -62,12 +62,18 @@ import java.util.concurrent.Executors
 fun CameraPreviewView(
     torchEnabled: Boolean,
     onQrDecoded: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    ecoModeEnabled: Boolean = true,
+    onEcoStateChanged: (Boolean) -> Unit = {}
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     var camera by remember { mutableStateOf<Camera?>(null) }
     val cameraExecutor = remember { Executors.newSingleThreadExecutor() }
+
+    var isEcoActive by remember { mutableStateOf(false) }
+    var lastActivityTime by remember { mutableStateOf(System.currentTimeMillis()) }
+    var lastAnalyzedTime by remember { mutableStateOf(0L) }
 
     LaunchedEffect(torchEnabled, camera) {
         camera?.cameraControl?.enableTorch(torchEnabled)
@@ -79,12 +85,13 @@ fun CameraPreviewView(
         }
     }
 
+    val laserDuration = if (isEcoActive) 3500 else 2000
     val infiniteTransition = rememberInfiniteTransition(label = "scan_laser")
     val laserPosition by infiniteTransition.animateFloat(
         initialValue = 0f,
         targetValue = 1f,
         animationSpec = infiniteRepeatable(
-            animation = tween(2000, easing = LinearEasing),
+            animation = tween(laserDuration, easing = LinearEasing),
             repeatMode = RepeatMode.Reverse
         ),
         label = "laser_anim"
@@ -117,6 +124,23 @@ fun CameraPreviewView(
                         val reader = MultiFormatReader()
 
                         imageAnalysis.setAnalyzer(cameraExecutor) { imageProxy ->
+                            val now = System.currentTimeMillis()
+                            val idleDuration = now - lastActivityTime
+                            val isIdle = ecoModeEnabled && idleDuration > 4000L
+
+                            if (isIdle != isEcoActive) {
+                                isEcoActive = isIdle
+                                onEcoStateChanged(isIdle)
+                            }
+
+                            // If Eco Mode is active, throttle analysis to ~2.2 FPS (every 450ms) to conserve CPU & battery
+                            if (isIdle && (now - lastAnalyzedTime < 450L)) {
+                                imageProxy.close()
+                                return@setAnalyzer
+                            }
+
+                            lastAnalyzedTime = now
+
                             try {
                                 val buffer = imageProxy.planes[0].buffer
                                 val bytes = ByteArray(buffer.remaining())
@@ -130,6 +154,11 @@ fun CameraPreviewView(
                                 val binaryBitmap = BinaryBitmap(HybridBinarizer(source))
                                 val result = reader.decodeWithState(binaryBitmap)
                                 if (result != null && result.text.isNotBlank()) {
+                                    lastActivityTime = System.currentTimeMillis()
+                                    if (isEcoActive) {
+                                        isEcoActive = false
+                                        onEcoStateChanged(false)
+                                    }
                                     onQrDecoded(result.text)
                                 }
                             } catch (e: Exception) {

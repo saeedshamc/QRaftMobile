@@ -27,6 +27,12 @@ data class BatchSessionEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val name: String,
     val totalCount: Int,
+    val successCount: Int = totalCount,
+    val failureCount: Int = 0,
     val timestamp: Long = System.currentTimeMillis(),
-    val zipFilePath: String
+    val zipFilePath: String = "",
+    val itemsJson: String = "[]",
+    val styleJson: String = "",
+    val sourceType: String = "CSV",
+    val notes: String = ""
 )

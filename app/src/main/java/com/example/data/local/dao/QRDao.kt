@@ -48,11 +48,23 @@ interface QRDao {
     suspend fun clearAllPresets()
 
     // Batch sessions
-    @Query("SELECT * FROM batch_sessions ORDER BY timestamp DESC LIMIT 10")
+    @Query("SELECT * FROM batch_sessions ORDER BY timestamp DESC")
+    fun getAllBatchSessions(): Flow<List<BatchSessionEntity>>
+
+    @Query("SELECT * FROM batch_sessions ORDER BY timestamp DESC LIMIT 20")
     fun getRecentBatchSessions(): Flow<List<BatchSessionEntity>>
+
+    @Query("SELECT * FROM batch_sessions WHERE id = :id")
+    suspend fun getBatchSessionById(id: Long): BatchSessionEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertBatchSession(session: BatchSessionEntity): Long
+
+    @Update
+    suspend fun updateBatchSession(session: BatchSessionEntity)
+
+    @Query("DELETE FROM batch_sessions WHERE id = :id")
+    suspend fun deleteBatchSessionById(id: Long)
 
     @Query("DELETE FROM batch_sessions")
     suspend fun clearAllBatchSessions()

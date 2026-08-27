@@ -10,6 +10,7 @@ class QRRepository(private val dao: QRDao) {
     val allHistory: Flow<List<QRHistoryEntity>> = dao.getAllHistory()
     val allPresets: Flow<List<QRPresetEntity>> = dao.getAllPresets()
     val recentBatches: Flow<List<BatchSessionEntity>> = dao.getRecentBatchSessions()
+    val allBatches: Flow<List<BatchSessionEntity>> = dao.getAllBatchSessions()
     val historyCount: Flow<Int> = dao.getHistoryCount()
 
     suspend fun addHistory(item: QRHistoryEntity): Long = dao.insertHistory(item)
@@ -23,5 +24,8 @@ class QRRepository(private val dao: QRDao) {
     suspend fun clearPresets() = dao.clearAllPresets()
 
     suspend fun addBatchSession(session: BatchSessionEntity): Long = dao.insertBatchSession(session)
+    suspend fun getBatchSession(id: Long): BatchSessionEntity? = dao.getBatchSessionById(id)
+    suspend fun updateBatchSession(session: BatchSessionEntity) = dao.updateBatchSession(session)
+    suspend fun deleteBatchSession(id: Long) = dao.deleteBatchSessionById(id)
     suspend fun clearBatchSessions() = dao.clearAllBatchSessions()
 }

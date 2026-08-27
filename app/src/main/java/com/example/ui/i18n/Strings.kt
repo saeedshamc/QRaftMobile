@@ -304,7 +304,22 @@ object Strings {
         "most_used_type" to "Most Popular Content Type",
         "distribution_by_type" to "Generation Breakdown by Content Type",
         "pro_tip_title" to "Craft Pro Tip",
-        "pro_tip_body" to "Higher error correction (H - 30%) is strongly recommended when overlaying center logos or heavy frames, while standard (M - 15%) is optimal for dense text payloads."
+        "pro_tip_body" to "Higher error correction (H - 30%) is strongly recommended when overlaying center logos or heavy frames, while standard (M - 15%) is optimal for dense text payloads.",
+
+        // Scanner Auto-Copy, Eco Mode & Quick Settings
+        "auto_copy_scanned" to "Auto-Copy Scanned QR",
+        "auto_copy_scanned_desc" to "Automatically copy scanned QR code content to the device clipboard",
+        "auto_copied_to_clipboard" to "Copied to clipboard automatically!",
+        "eco_mode_label" to "Battery Saver Scanner",
+        "eco_mode_desc" to "Reduces camera analysis rate when idle to conserve battery life",
+        "eco_mode_badge" to "Eco Mode Active",
+        "tile_qr_scanner" to "Scan QR",
+        "tile_qr_scanner_desc" to "Quick QR & Barcode Scanner",
+        "batch_details" to "Batch Session Details",
+        "re_export_batch" to "Re-export / Share ZIP",
+        "regenerate_batch" to "Regenerate Batch",
+        "delete_batch_confirm" to "Delete this batch record?",
+        "batch_items_summary" to "%d items (%d valid, %d failed)"
     )
 
     private val farsiStrings = mapOf(
@@ -597,6 +612,21 @@ object Strings {
         "most_used_type" to "پراستفاده‌ترین نوع محتوا",
         "distribution_by_type" to "تفکیک تولیدات بر اساس نوع محتوا",
         "pro_tip_title" to "نکته تخصصی طراحی",
-        "pro_tip_body" to "سطح تصحیح خطای بالا (H - ۳۰٪) برای طرح‌های دارای لوگو یا قاب پیشنهاد می‌شود، در حالی که سطح استاندارد (M - ۱۵٪) برای متون فشرده عملکرد بهتری دارد."
+        "pro_tip_body" to "سطح تصحیح خطای بالا (H - ۳۰٪) برای طرح‌های دارای لوگو یا قاب پیشنهاد می‌شود، در حالی که سطح استاندارد (M - ۱۵٪) برای متون فشرده عملکرد بهتری دارد.",
+
+        // Scanner Auto-Copy, Eco Mode & Quick Settings
+        "auto_copy_scanned" to "کپی خودکار کیو‌آرکد اسکن‌شده",
+        "auto_copy_scanned_desc" to "کپی خودکار متن کد اسکن‌شده به حافظه موقت دستگاه",
+        "auto_copied_to_clipboard" to "به‌طور خودکار در کلیپ‌بورد کپی شد!",
+        "eco_mode_label" to "حالت بهینه‌ساز باتری اسکنر",
+        "eco_mode_desc" to "کاهش نرخ پردازش فریم‌های دوربین در زمان عدم تشخیص برای کاهش مصرف باتری",
+        "eco_mode_badge" to "مصرف بهینه باتری فعال",
+        "tile_qr_scanner" to "اسکن بارکد",
+        "tile_qr_scanner_desc" to "اسکن سریع کیوآرکد و بارکد",
+        "batch_details" to "جزئیات دسته تولیدشده",
+        "re_export_batch" to "خروجی مجدد / اشتراک ZIP",
+        "regenerate_batch" to "تولید مجدد دسته",
+        "delete_batch_confirm" to "آیا از حذف این رکورد دسته اطمینان دارید؟",
+        "batch_items_summary" to "%d مورد (%d معتبر، %d ناموفق)"
     )
 }

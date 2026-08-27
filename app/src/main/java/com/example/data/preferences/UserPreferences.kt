@@ -74,6 +74,22 @@ class UserPreferences(context: Context) {
         prefs.edit().putString("custom_design_profiles_json", json).apply()
     }
 
+    fun getAutoCopyScanned(): Boolean {
+        return prefs.getBoolean("auto_copy_scanned_qr", true)
+    }
+
+    fun setAutoCopyScanned(enabled: Boolean) {
+        prefs.edit().putBoolean("auto_copy_scanned_qr", enabled).apply()
+    }
+
+    fun getScannerEcoMode(): Boolean {
+        return prefs.getBoolean("scanner_eco_mode", true)
+    }
+
+    fun setScannerEcoMode(enabled: Boolean) {
+        prefs.edit().putBoolean("scanner_eco_mode", enabled).apply()
+    }
+
     fun clearAllStats() {
         val editor = prefs.edit()
         prefs.all.keys.filter { it.startsWith("count_type_") || it == "total_generated_count" || it.startsWith("last_cloud_sync") }.forEach {
