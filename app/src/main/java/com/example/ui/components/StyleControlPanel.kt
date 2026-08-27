@@ -31,6 +31,7 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
@@ -47,6 +48,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -70,21 +72,33 @@ import com.example.domain.model.ErrorCorrection
 import com.example.domain.model.EyeFrameStyle
 import com.example.domain.model.EyeInnerStyle
 import com.example.domain.model.GradientType
+import com.example.domain.model.QRDesignProfile
 import com.example.domain.model.QRDesignTemplate
 import com.example.domain.model.QRDesignTemplates
 import com.example.domain.model.QRStyle
 import com.example.ui.i18n.AppLanguage
 import com.example.ui.i18n.Strings
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.BookmarkBorder
+import androidx.compose.material.icons.filled.AutoAwesome
 
 @Composable
 fun StyleControlPanel(
     style: QRStyle,
     language: AppLanguage,
+    customProfiles: List<QRDesignProfile> = emptyList(),
     onStyleChange: ((QRStyle) -> QRStyle) -> Unit,
     onApplyPalette: (ColorPalettePreset) -> Unit,
     onApplyTemplate: (QRDesignTemplate) -> Unit = {},
+    onSaveProfile: (String) -> Unit = {},
+    onApplyProfile: (QRDesignProfile) -> Unit = {},
+    onDeleteProfile: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    var showSaveProfileDialog by remember { mutableStateOf(false) }
+    var profileNameInput by remember { mutableStateOf("") }
+
     val logoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
@@ -151,6 +165,136 @@ fun StyleControlPanel(
                     ) {
                         Icon(imageVector = Icons.Default.Shield, contentDescription = null, tint = badgeColor, modifier = Modifier.size(14.dp))
                         Text(text = badgeText, style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold), color = badgeColor)
+                    }
+                }
+            }
+
+            // --- SAVED QR DESIGN PROFILES (THEME ENGINE) ---
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Bookmark,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text(
+                            text = Strings.get("design_profiles_title", language),
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+
+                    FilledTonalButton(
+                        onClick = { showSaveProfileDialog = true },
+                        shape = RoundedCornerShape(8.dp),
+                        contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                        modifier = Modifier.testTag("save_design_profile_btn")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = null,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = Strings.get("save_current_style", language),
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
+                        )
+                    }
+                }
+
+                if (customProfiles.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        customProfiles.forEach { profile ->
+                            Card(
+                                modifier = Modifier
+                                    .width(150.dp)
+                                    .clickable { onApplyProfile(profile) }
+                                    .testTag("profile_${profile.id}"),
+                                shape = RoundedCornerShape(14.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                )
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(10.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    // Visual color strip
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(28.dp)
+                                            .clip(RoundedCornerShape(6.dp))
+                                            .background(Color(profile.bgColor.toInt())),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.Center
+                                    ) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(16.dp)
+                                                .clip(CircleShape)
+                                                .background(Color(profile.fgColor.toInt()))
+                                        )
+                                        if (profile.gradientMode) {
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(16.dp)
+                                                    .clip(CircleShape)
+                                                    .background(Color(profile.gradientEndColor.toInt()))
+                                            )
+                                        }
+                                    }
+
+                                    val pName = if (language == AppLanguage.FA) profile.nameFa else profile.nameEn
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = pName,
+                                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                            maxLines = 1,
+                                            modifier = Modifier.weight(1f),
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        IconButton(
+                                            onClick = { onDeleteProfile(profile.id) },
+                                            modifier = Modifier.size(20.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Delete,
+                                                contentDescription = "Delete",
+                                                tint = MaterialTheme.colorScheme.error.copy(alpha = 0.8f),
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                        }
+                                    }
+
+                                    Text(
+                                        text = "${profile.dotStyle.name} • EC-${profile.errorCorrection.name}",
+                                        style = MaterialTheme.typography.labelSmall.copy(fontSize = 10.sp),
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -936,6 +1080,43 @@ fun StyleControlPanel(
                 }
             }
         }
+    }
+
+    if (showSaveProfileDialog) {
+        AlertDialog(
+            onDismissRequest = { showSaveProfileDialog = false },
+            title = { Text(Strings.get("save_design_profile_title", language)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(Strings.get("enter_profile_name", language))
+                    OutlinedTextField(
+                        value = profileNameInput,
+                        onValueChange = { profileNameInput = it },
+                        label = { Text(Strings.get("profile_name", language)) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        if (profileNameInput.isNotBlank()) {
+                            onSaveProfile(profileNameInput)
+                            profileNameInput = ""
+                            showSaveProfileDialog = false
+                        }
+                    }
+                ) {
+                    Text(Strings.get("save", language))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showSaveProfileDialog = false }) {
+                    Text(Strings.get("cancel", language))
+                }
+            }
+        )
     }
 }
 

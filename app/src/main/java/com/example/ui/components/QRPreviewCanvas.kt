@@ -1,6 +1,11 @@
 package com.example.ui.components
 
 import android.graphics.Bitmap
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -16,15 +21,20 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BookmarkBorder
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material.icons.filled.QrCode
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Speed
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.ZoomIn
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -44,6 +54,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
@@ -63,6 +74,8 @@ fun QRPreviewCanvas(
     payload: String,
     style: QRStyle,
     language: AppLanguage,
+    scannabilityRatingKey: String = "contrast_excellent",
+    scannabilityScore: String = "100%",
     onCopy: () -> Unit,
     onShare: () -> Unit,
     onExportPng: () -> Unit,
@@ -75,6 +88,18 @@ fun QRPreviewCanvas(
 ) {
     var showExportMenu by remember { mutableStateOf(false) }
     var showZoomDialog by remember { mutableStateOf(false) }
+
+    // Live preview pulse animation
+    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+    val pulseAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.4f,
+        targetValue = 1.0f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(900),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulseAlpha"
+    )
 
     Card(
         modifier = modifier
@@ -89,35 +114,84 @@ fun QRPreviewCanvas(
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Badges row
+            // Header Row: Live Indicator + Error Correction & Size Badges
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                // Live Preview Pill
                 Surface(
-                    color = MaterialTheme.colorScheme.primaryContainer,
-                    shape = RoundedCornerShape(8.dp)
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f),
+                    shape = RoundedCornerShape(12.dp)
                 ) {
-                    Text(
-                        text = "EC: ${style.errorCorrection.label} (${style.errorCorrection.tolerance})",
+                    Row(
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                    )
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .alpha(pulseAlpha)
+                                .background(MaterialTheme.colorScheme.primary, CircleShape)
+                        )
+                        Text(
+                            text = Strings.get("live_preview", language),
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
                 }
 
-                Surface(
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                    shape = RoundedCornerShape(8.dp)
-                ) {
-                    Text(
-                        text = "${style.sizePx} × ${style.sizePx}px",
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                // Scannability Score Indicator
+                val scannabilityColor = when (scannabilityRatingKey) {
+                    "contrast_excellent" -> Color(0xFF10B981)
+                    "contrast_good" -> Color(0xFFF59E0B)
+                    else -> Color(0xFFEF4444)
                 }
+                Surface(
+                    color = scannabilityColor.copy(alpha = 0.15f),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (scannabilityRatingKey == "contrast_warning") Icons.Default.Warning else Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            tint = scannabilityColor,
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Text(
+                            text = "${Strings.get(scannabilityRatingKey, language)} ($scannabilityScore)",
+                            style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                            color = scannabilityColor
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Info Sub-row: EC & Resolution
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "EC: ${style.errorCorrection.label} (${style.errorCorrection.tolerance})",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = "${style.sizePx} × ${style.sizePx} px",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -149,7 +223,7 @@ fun QRPreviewCanvas(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Action Buttons Row
+            // Action Buttons Row (Uniform 20dp icons with 48dp touch targets)
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly,
@@ -158,7 +232,9 @@ fun QRPreviewCanvas(
                 // Copy Action
                 FilledTonalIconButton(
                     onClick = onCopy,
-                    modifier = Modifier.testTag("copy_button"),
+                    modifier = Modifier
+                        .size(44.dp)
+                        .testTag("copy_button"),
                     colors = IconButtonDefaults.filledTonalIconButtonColors(
                         containerColor = MaterialTheme.colorScheme.surfaceVariant
                     )
@@ -166,6 +242,7 @@ fun QRPreviewCanvas(
                     Icon(
                         imageVector = Icons.Default.ContentCopy,
                         contentDescription = Strings.get("copy", language),
+                        modifier = Modifier.size(20.dp),
                         tint = MaterialTheme.colorScheme.onSurface
                     )
                 }
@@ -173,7 +250,9 @@ fun QRPreviewCanvas(
                 // Share Action
                 FilledTonalIconButton(
                     onClick = onShare,
-                    modifier = Modifier.testTag("share_button"),
+                    modifier = Modifier
+                        .size(44.dp)
+                        .testTag("share_button"),
                     colors = IconButtonDefaults.filledTonalIconButtonColors(
                         containerColor = MaterialTheme.colorScheme.primaryContainer
                     )
@@ -181,6 +260,7 @@ fun QRPreviewCanvas(
                     Icon(
                         imageVector = Icons.Default.Share,
                         contentDescription = Strings.get("share", language),
+                        modifier = Modifier.size(20.dp),
                         tint = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 }
@@ -189,7 +269,9 @@ fun QRPreviewCanvas(
                 Box {
                     FilledTonalIconButton(
                         onClick = { showExportMenu = true },
-                        modifier = Modifier.testTag("export_menu_button"),
+                        modifier = Modifier
+                            .size(44.dp)
+                            .testTag("export_menu_button"),
                         colors = IconButtonDefaults.filledTonalIconButtonColors(
                             containerColor = MaterialTheme.colorScheme.secondaryContainer
                         )
@@ -197,6 +279,7 @@ fun QRPreviewCanvas(
                         Icon(
                             imageVector = Icons.Default.Download,
                             contentDescription = "Export Formats",
+                            modifier = Modifier.size(20.dp),
                             tint = MaterialTheme.colorScheme.onSecondaryContainer
                         )
                     }
@@ -206,28 +289,28 @@ fun QRPreviewCanvas(
                         onDismissRequest = { showExportMenu = false }
                     ) {
                         DropdownMenuItem(
-                            text = { Text(Strings.get("export_png", language)) },
+                            text = { Text(Strings.get("export_png", language), style = MaterialTheme.typography.bodyMedium) },
                             onClick = {
                                 showExportMenu = false
                                 onExportPng()
                             }
                         )
                         DropdownMenuItem(
-                            text = { Text(Strings.get("export_jpg", language)) },
+                            text = { Text(Strings.get("export_jpg", language), style = MaterialTheme.typography.bodyMedium) },
                             onClick = {
                                 showExportMenu = false
                                 onExportJpg()
                             }
                         )
                         DropdownMenuItem(
-                            text = { Text(Strings.get("export_svg", language)) },
+                            text = { Text(Strings.get("export_svg", language), style = MaterialTheme.typography.bodyMedium) },
                             onClick = {
                                 showExportMenu = false
                                 onExportSvg()
                             }
                         )
                         DropdownMenuItem(
-                            text = { Text(Strings.get("export_pdf", language)) },
+                            text = { Text(Strings.get("export_pdf", language), style = MaterialTheme.typography.bodyMedium) },
                             onClick = {
                                 showExportMenu = false
                                 onExportPdf()
@@ -239,7 +322,9 @@ fun QRPreviewCanvas(
                 // Add to History
                 FilledTonalIconButton(
                     onClick = onAddToHistory,
-                    modifier = Modifier.testTag("history_button"),
+                    modifier = Modifier
+                        .size(44.dp)
+                        .testTag("history_button"),
                     colors = IconButtonDefaults.filledTonalIconButtonColors(
                         containerColor = MaterialTheme.colorScheme.surfaceVariant
                     )
@@ -247,6 +332,7 @@ fun QRPreviewCanvas(
                     Icon(
                         imageVector = Icons.Default.History,
                         contentDescription = Strings.get("add_to_history", language),
+                        modifier = Modifier.size(20.dp),
                         tint = MaterialTheme.colorScheme.onSurface
                     )
                 }
@@ -254,7 +340,9 @@ fun QRPreviewCanvas(
                 // Save Preset
                 FilledTonalIconButton(
                     onClick = onSavePreset,
-                    modifier = Modifier.testTag("save_preset_button"),
+                    modifier = Modifier
+                        .size(44.dp)
+                        .testTag("save_preset_button"),
                     colors = IconButtonDefaults.filledTonalIconButtonColors(
                         containerColor = MaterialTheme.colorScheme.surfaceVariant
                     )
@@ -262,6 +350,7 @@ fun QRPreviewCanvas(
                     Icon(
                         imageVector = Icons.Default.BookmarkBorder,
                         contentDescription = Strings.get("save_as_preset", language),
+                        modifier = Modifier.size(20.dp),
                         tint = MaterialTheme.colorScheme.onSurface
                     )
                 }

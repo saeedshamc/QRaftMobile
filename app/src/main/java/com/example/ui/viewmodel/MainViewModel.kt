@@ -25,6 +25,7 @@ import com.example.domain.engine.AnimatedEncodeResult
 import com.example.domain.engine.AnimatedQREngine
 import com.example.domain.engine.CsvBatchParser
 import com.example.domain.engine.CsvBatchRow
+import com.example.domain.engine.CsvHistoryExporter
 import com.example.domain.engine.DecodeSessionState
 import com.example.domain.engine.GifFrameExtractor
 import com.example.domain.engine.QRGeneratorEngine
@@ -48,6 +49,7 @@ import com.example.domain.model.InstagramContent
 import com.example.domain.model.LocationContent
 import com.example.domain.model.PayPalContent
 import com.example.domain.model.PhoneContent
+import com.example.domain.model.QRDesignProfile
 import com.example.domain.model.QRDesignTemplate
 import com.example.domain.model.QRDesignTemplates
 import com.example.domain.model.QRStyle
@@ -219,10 +221,31 @@ class MainViewModel(
     private val _typeStats = MutableStateFlow<Map<String, Int>>(emptyMap())
     val typeStats: StateFlow<Map<String, Int>> = _typeStats.asStateFlow()
 
+    // Diagnostics & Storage Maintenance State
+    private val _cacheSizeBytes = MutableStateFlow(0L)
+    val cacheSizeBytes: StateFlow<Long> = _cacheSizeBytes.asStateFlow()
+
+    private val _memoryAllocatedMb = MutableStateFlow(0L)
+    val memoryAllocatedMb: StateFlow<Long> = _memoryAllocatedMb.asStateFlow()
+
+    private val _memoryMaxMb = MutableStateFlow(0L)
+    val memoryMaxMb: StateFlow<Long> = _memoryMaxMb.asStateFlow()
+
+    // QR Design Profiles State
+    private val _customDesignProfiles = MutableStateFlow<List<QRDesignProfile>>(emptyList())
+    val customDesignProfiles: StateFlow<List<QRDesignProfile>> = _customDesignProfiles.asStateFlow()
+    val customProfiles: StateFlow<List<QRDesignProfile>> = _customDesignProfiles.asStateFlow()
+
+    // Google Drive Cloud Sync State
+    private val _lastCloudSyncTime = MutableStateFlow(userPrefs.getLastCloudSyncTime())
+    val lastCloudSyncTime: StateFlow<Long> = _lastCloudSyncTime.asStateFlow()
+
     init {
         updateStatsMap()
         parseBatchCsv()
-        triggerQRGeneration()
+        loadCustomDesignProfiles()
+        refreshDiagnostics(application)
+        triggerQRGeneration(instant = true)
     }
 
     fun setLanguage(lang: AppLanguage) {
@@ -247,7 +270,7 @@ class MainViewModel(
 
     fun updateStyle(transform: (QRStyle) -> QRStyle) {
         _qrStyle.value = transform(_qrStyle.value)
-        triggerQRGeneration()
+        triggerQRGeneration(instant = true)
     }
 
     fun applyColorPalette(palette: ColorPalettePreset) {
@@ -258,24 +281,26 @@ class MainViewModel(
             gradientMode = true,
             activePaletteId = palette.id
         )
-        triggerQRGeneration()
+        triggerQRGeneration(instant = true)
     }
 
     fun applyDesignTemplate(template: QRDesignTemplate, context: Context) {
         _qrStyle.value = template.applyTo(_qrStyle.value)
-        triggerQRGeneration()
+        triggerQRGeneration(instant = true)
         val templateName = if (_language.value == AppLanguage.FA) template.nameFa else template.nameEn
         showToast(context, String.format(Strings.get("template_applied", _language.value), templateName))
     }
 
     fun onFormChanged() {
-        triggerQRGeneration()
+        triggerQRGeneration(instant = false)
     }
 
-    private fun triggerQRGeneration() {
+    private fun triggerQRGeneration(instant: Boolean = false) {
         debounceJob?.cancel()
         debounceJob = viewModelScope.launch(Dispatchers.Default) {
-            delay(200)
+            if (!instant) {
+                delay(120)
+            }
             val payload = ContentEncoder.encode(
                 type = _selectedContentType.value,
                 url = urlForm.value,
@@ -296,6 +321,29 @@ class MainViewModel(
             _encodedPayload.value = payload
             val bitmap = QRGeneratorEngine.generateQRBitmap(payload, _qrStyle.value, getApplication())
             _previewBitmap.value = bitmap
+        }
+    }
+
+    fun getScannabilityInfo(): Pair<String, String> {
+        val style = _qrStyle.value
+        val fg = style.fgColor
+        val bg = if (style.transparentBg) 0xFFFFFFFF else style.bgColor
+
+        val fgR = ((fg shr 16) and 0xFF) / 255.0
+        val fgG = ((fg shr 8) and 0xFF) / 255.0
+        val fgB = (fg and 0xFF) / 255.0
+        val bgR = ((bg shr 16) and 0xFF) / 255.0
+        val bgG = ((bg shr 8) and 0xFF) / 255.0
+        val bgB = (bg and 0xFF) / 255.0
+
+        val lumFg = 0.2126 * fgR + 0.7152 * fgG + 0.0722 * fgB
+        val lumBg = 0.2126 * bgR + 0.7152 * bgG + 0.0722 * bgB
+
+        val ratio = if (lumFg > lumBg) (lumFg + 0.05) / (lumBg + 0.05) else (lumBg + 0.05) / (lumFg + 0.05)
+        return when {
+            ratio >= 4.5 -> "contrast_excellent" to "100%"
+            ratio >= 2.2 -> "contrast_good" to "85%"
+            else -> "contrast_warning" to "45%"
         }
     }
 
@@ -664,6 +712,293 @@ class MainViewModel(
     }
 
     fun restoreHistoryItemToCreator(item: QRHistoryEntity) = restoreHistoryItem(item)
+
+    // ==========================================
+    // DIAGNOSTICS & STORAGE MAINTENANCE ENGINE
+    // ==========================================
+    fun refreshDiagnostics(context: Context) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val cacheSize = calculateDirectorySize(context.cacheDir) +
+                (context.externalCacheDir?.let { calculateDirectorySize(it) } ?: 0L)
+            _cacheSizeBytes.value = cacheSize
+
+            val runtime = Runtime.getRuntime()
+            val usedMem = (runtime.totalMemory() - runtime.freeMemory()) / (1024 * 1024)
+            val maxMem = runtime.maxMemory() / (1024 * 1024)
+            _memoryAllocatedMb.value = usedMem
+            _memoryMaxMb.value = maxMem
+        }
+    }
+
+    private fun calculateDirectorySize(dir: File?): Long {
+        if (dir == null || !dir.exists()) return 0L
+        var size = 0L
+        dir.listFiles()?.forEach { file ->
+            size += if (file.isDirectory) calculateDirectorySize(file) else file.length()
+        }
+        return size
+    }
+
+    fun clearAppCache(context: Context) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val initialSize = _cacheSizeBytes.value
+            clearDirectory(context.cacheDir)
+            context.externalCacheDir?.let { clearDirectory(it) }
+            refreshDiagnostics(context)
+            withContext(Dispatchers.Main) {
+                val freedStr = formatBytes(initialSize)
+                showToast(context, String.format(Strings.get("cache_cleared_success", _language.value), freedStr))
+            }
+        }
+    }
+
+    private fun clearDirectory(dir: File?) {
+        if (dir == null || !dir.exists()) return
+        dir.listFiles()?.forEach { file ->
+            if (file.isDirectory) clearDirectory(file)
+            file.delete()
+        }
+    }
+
+    fun formatBytes(bytes: Long): String {
+        return when {
+            bytes >= 1024 * 1024 -> String.format(Locale.US, "%.1f MB", bytes.toDouble() / (1024 * 1024))
+            bytes >= 1024 -> String.format(Locale.US, "%.1f KB", bytes.toDouble() / 1024)
+            else -> "$bytes B"
+        }
+    }
+
+    // ==========================================
+    // STRUCTURED CSV HISTORY EXPORT (RFC 4180)
+    // ==========================================
+    fun exportHistoryToCsv(context: Context) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val items = historyList.value
+            if (items.isEmpty()) {
+                withContext(Dispatchers.Main) {
+                    showToast(context, Strings.get("no_history", _language.value))
+                }
+                return@launch
+            }
+            val csvData = CsvHistoryExporter.exportToCsv(items)
+            val timestamp = System.currentTimeMillis()
+            val file = File(context.cacheDir, "qraft_history_${timestamp}.csv")
+            file.writeText(csvData, Charsets.UTF_8)
+
+            withContext(Dispatchers.Main) {
+                try {
+                    val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+                    val intent = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/csv"
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        putExtra(Intent.EXTRA_SUBJECT, "QRaft History Export (CSV)")
+                        putExtra(Intent.EXTRA_TEXT, "Exported QR History from QRaft Studio (${items.size} records)")
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    val chooser = Intent.createChooser(intent, Strings.get("export_csv", _language.value))
+                    chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    context.startActivity(chooser)
+                    showToast(context, Strings.get("csv_export_success", _language.value))
+                } catch (e: Exception) {
+                    showToast(context, "Export error: ${e.localizedMessage}")
+                }
+            }
+        }
+    }
+
+    // ==========================================
+    // QR DESIGN PROFILES THEME ENGINE
+    // ==========================================
+    fun loadCustomDesignProfiles() {
+        try {
+            val jsonStr = userPrefs.getCustomProfilesJson()
+            val array = JSONArray(jsonStr)
+            val list = mutableListOf<QRDesignProfile>()
+            for (i in 0 until array.length()) {
+                list.add(QRDesignProfile.fromJson(array.getJSONObject(i)))
+            }
+            _customDesignProfiles.value = list
+        } catch (e: Exception) {
+            _customDesignProfiles.value = emptyList()
+        }
+    }
+
+    fun saveCurrentStyleAsProfile(name: String, context: Context) {
+        val cleanName = name.trim().ifBlank { "Custom Profile ${System.currentTimeMillis() % 1000}" }
+        val newProfile = QRDesignProfile.fromStyle(_qrStyle.value, cleanName)
+        val current = _customDesignProfiles.value.toMutableList()
+        current.add(0, newProfile)
+        _customDesignProfiles.value = current
+
+        val array = JSONArray()
+        current.forEach { array.put(it.toJson()) }
+        userPrefs.setCustomProfilesJson(array.toString())
+
+        showToast(context, String.format(Strings.get("profile_saved", _language.value), cleanName))
+    }
+
+    fun applyDesignProfile(profile: QRDesignProfile, context: Context) {
+        _qrStyle.value = profile.applyTo(_qrStyle.value)
+        triggerQRGeneration(instant = true)
+        val name = if (_language.value == AppLanguage.FA) profile.nameFa else profile.nameEn
+        showToast(context, String.format(Strings.get("profile_loaded", _language.value), name))
+    }
+
+    fun saveDesignProfile(name: String, context: Context) = saveCurrentStyleAsProfile(name, context)
+
+    fun deleteDesignProfile(profileId: String, context: Context) {
+        val current = _customDesignProfiles.value.toMutableList()
+        current.removeAll { it.id == profileId }
+        _customDesignProfiles.value = current
+
+        val array = JSONArray()
+        current.forEach { array.put(it.toJson()) }
+        userPrefs.setCustomProfilesJson(array.toString())
+
+        showToast(context, Strings.get("profile_deleted", _language.value))
+    }
+
+    fun deleteDesignProfile(profile: QRDesignProfile, context: Context) = deleteDesignProfile(profile.id, context)
+
+    // Aliases for SettingsDialog
+    fun clearCache(context: Context) = clearAppCache(context)
+    fun backupToCloud(context: Context) = syncWithGoogleDrive(context)
+    fun restoreFromCloud(context: Context, uri: Uri) = restoreFromGoogleDrive(context, uri)
+
+    // ==========================================
+    // GOOGLE DRIVE & CLOUD SYNCHRONIZATION ENGINE
+    // ==========================================
+    fun syncWithGoogleDrive(context: Context) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val historyItems = historyList.value
+            val customProfiles = _customDesignProfiles.value
+
+            val root = JSONObject()
+            root.put("appName", "QRaft Studio Cloud Sync")
+            root.put("syncVersion", 2)
+            val now = System.currentTimeMillis()
+            root.put("timestamp", now)
+            root.put("syncDate", SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date(now)))
+
+            // History
+            val histArray = JSONArray()
+            for (item in historyItems) {
+                histArray.put(JSONObject().apply {
+                    put("content", item.content)
+                    put("contentType", item.contentType)
+                    put("label", item.label)
+                    put("notes", item.notes)
+                    put("styleJson", item.styleJson)
+                    put("timestamp", item.timestamp)
+                })
+            }
+            root.put("history", histArray)
+
+            // Custom Profiles
+            val profArray = JSONArray()
+            for (prof in customProfiles) {
+                profArray.put(prof.toJson())
+            }
+            root.put("profiles", profArray)
+
+            // User Preferences
+            root.put("totalGeneratedCount", _totalGeneratedCount.value)
+            root.put("themeMode", _themeMode.value.name)
+            root.put("language", _language.value.name)
+
+            val file = File(context.cacheDir, "qraft_gdrive_sync_backup_${now}.json")
+            file.writeText(root.toString(2), Charsets.UTF_8)
+
+            userPrefs.setLastCloudSyncTime(now)
+            _lastCloudSyncTime.value = now
+
+            withContext(Dispatchers.Main) {
+                try {
+                    val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+                    val intent = Intent(Intent.ACTION_SEND).apply {
+                        type = "application/json"
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        putExtra(Intent.EXTRA_SUBJECT, "QRaft Google Drive Cloud Backup")
+                        putExtra(Intent.EXTRA_TEXT, "QRaft Studio complete cloud synchronization archive with ${historyItems.size} history items and ${customProfiles.size} design profiles.")
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    val chooser = Intent.createChooser(intent, Strings.get("cloud_sync_title", _language.value))
+                    chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    context.startActivity(chooser)
+                    showToast(context, Strings.get("cloud_sync_success", _language.value))
+                } catch (e: Exception) {
+                    showToast(context, "Cloud sync error: ${e.localizedMessage}")
+                }
+            }
+        }
+    }
+
+    fun restoreFromGoogleDrive(context: Context, uri: Uri) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val jsonString = context.contentResolver.openInputStream(uri)?.use { stream ->
+                    stream.bufferedReader(Charsets.UTF_8).readText()
+                } ?: throw IllegalArgumentException("Cannot open cloud file stream")
+
+                val root = JSONObject(jsonString)
+                var restoredCount = 0
+
+                // Restore History
+                val historyArray = root.optJSONArray("history")
+                if (historyArray != null) {
+                    for (i in 0 until historyArray.length()) {
+                        val obj = historyArray.getJSONObject(i)
+                        val content = obj.optString("content")
+                        if (content.isNotBlank()) {
+                            repository.addHistory(
+                                QRHistoryEntity(
+                                    content = content,
+                                    contentType = obj.optString("contentType", "TEXT"),
+                                    label = obj.optString("label", "Cloud Restored QR"),
+                                    notes = obj.optString("notes", "Restored from Google Drive Sync"),
+                                    styleJson = obj.optString("styleJson", "{}"),
+                                    timestamp = obj.optLong("timestamp", System.currentTimeMillis())
+                                )
+                            )
+                            restoredCount++
+                        }
+                    }
+                }
+
+                // Restore Profiles
+                val profArray = root.optJSONArray("profiles")
+                if (profArray != null) {
+                    val list = _customDesignProfiles.value.toMutableList()
+                    for (i in 0 until profArray.length()) {
+                        val profile = QRDesignProfile.fromJson(profArray.getJSONObject(i))
+                        if (list.none { it.id == profile.id || (it.nameEn == profile.nameEn && it.nameFa == profile.nameFa) }) {
+                            list.add(profile)
+                            restoredCount++
+                        }
+                    }
+                    _customDesignProfiles.value = list
+                    val newArray = JSONArray()
+                    list.forEach { newArray.put(it.toJson()) }
+                    userPrefs.setCustomProfilesJson(newArray.toString())
+                }
+
+                userPrefs.setLastCloudSyncTime(System.currentTimeMillis())
+                _lastCloudSyncTime.value = System.currentTimeMillis()
+
+                withContext(Dispatchers.Main) {
+                    showToast(
+                        context,
+                        String.format(Strings.get("cloud_restore_success", _language.value), restoredCount)
+                    )
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                withContext(Dispatchers.Main) {
+                    showToast(context, "Cloud restore failed: ${e.localizedMessage}")
+                }
+            }
+        }
+    }
 
     // Scanner actions
     fun onQrScanned(resultText: String) {

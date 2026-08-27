@@ -58,9 +58,25 @@ class UserPreferences(context: Context) {
         prefs.edit().putInt("count_type_$type", c).apply()
     }
 
+    fun getLastCloudSyncTime(): Long {
+        return prefs.getLong("last_cloud_sync_timestamp", 0L)
+    }
+
+    fun setLastCloudSyncTime(timestamp: Long) {
+        prefs.edit().putLong("last_cloud_sync_timestamp", timestamp).apply()
+    }
+
+    fun getCustomProfilesJson(): String {
+        return prefs.getString("custom_design_profiles_json", "[]") ?: "[]"
+    }
+
+    fun setCustomProfilesJson(json: String) {
+        prefs.edit().putString("custom_design_profiles_json", json).apply()
+    }
+
     fun clearAllStats() {
         val editor = prefs.edit()
-        prefs.all.keys.filter { it.startsWith("count_type_") || it == "total_generated_count" }.forEach {
+        prefs.all.keys.filter { it.startsWith("count_type_") || it == "total_generated_count" || it.startsWith("last_cloud_sync") }.forEach {
             editor.remove(it)
         }
         editor.apply()

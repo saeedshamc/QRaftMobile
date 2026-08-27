@@ -138,8 +138,8 @@ fun HistoryScreen(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f))
             ) {
                 Column(
-                    modifier = Modifier.padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -169,10 +169,12 @@ fun HistoryScreen(
                         )
                     }
 
+                    // Export / Import Action Row
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+                        // JSON Backup
                         FilledTonalButton(
                             onClick = { viewModel.exportHistoryToJson(context) },
                             modifier = Modifier
@@ -185,13 +187,36 @@ fun HistoryScreen(
                                 contentDescription = null,
                                 modifier = Modifier.size(16.dp)
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
                             Text(
                                 text = Strings.get("export_json_backup", language),
-                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold)
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                                maxLines = 1
                             )
                         }
 
+                        // CSV Export
+                        FilledTonalButton(
+                            onClick = { viewModel.exportHistoryToCsv(context) },
+                            modifier = Modifier
+                                .weight(1f)
+                                .testTag("export_csv_history_button"),
+                            shape = RoundedCornerShape(10.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.FileDownload,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = Strings.get("export_csv", language),
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                                maxLines = 1
+                            )
+                        }
+
+                        // JSON Restore
                         OutlinedButton(
                             onClick = {
                                 jsonImportLauncher.launch(arrayOf("application/json", "text/*", "*/*"))
@@ -206,10 +231,11 @@ fun HistoryScreen(
                                 contentDescription = null,
                                 modifier = Modifier.size(16.dp)
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
                             Text(
                                 text = Strings.get("import_json_backup", language),
-                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold)
+                                style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
+                                maxLines = 1
                             )
                         }
                     }

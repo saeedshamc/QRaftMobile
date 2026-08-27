@@ -206,6 +206,53 @@ object Strings {
         "backup_export_success" to "History exported as JSON. Select Google Drive or app to save.",
         "backup_import_success" to "Successfully restored %d items from JSON backup!",
         "backup_import_error" to "Failed to parse backup JSON file.",
+        "history_backup_title" to "Database Backup & Sync",
+        "cloud_drive_desc" to "Google Drive & Cloud Storage",
+
+        // Real-time Live Preview
+        "live_preview" to "Live Instant Preview",
+        "live_preview_desc" to "Updates in real-time as you tweak colors, geometry & sliders",
+        "scannability_score" to "Scannability",
+        "contrast_excellent" to "Excellent Contrast (100%)",
+        "contrast_good" to "Good Contrast (85%)",
+        "contrast_warning" to "Low Contrast Warning",
+
+        // Diagnostics & Cache
+        "diagnostics_title" to "App Diagnostics & Storage",
+        "cache_size" to "Cache Storage",
+        "memory_usage" to "JVM Memory",
+        "db_records" to "Database Records",
+        "clear_cache_btn" to "Clear Cache",
+        "cache_cleared_success" to "Temporary cache cleared (%s freed)!",
+        "storage_healthy" to "Optimal",
+
+        // CSV History Export
+        "export_csv" to "Export CSV (Excel)",
+        "export_csv_desc" to "Export history with detailed styling & timestamps for spreadsheets",
+        "csv_export_success" to "History exported to CSV! Open in Excel, Sheets or Drive.",
+
+        // QR Design Profiles
+        "design_profiles_title" to "Design Profiles",
+        "design_profiles_desc" to "Save & load complete styles (colors, eye shapes, tolerances)",
+        "save_as_profile" to "Save as New Profile",
+        "profile_name_hint" to "Profile Name (e.g. Modern Blue, Dark Gold)...",
+        "profile_saved" to "Profile '%s' saved!",
+        "profile_loaded" to "Profile '%s' applied!",
+        "profile_deleted" to "Profile deleted",
+        "no_custom_profiles" to "No custom design profiles saved yet. Customize your QR and tap 'Save Profile'!",
+        "delete_profile_confirm" to "Are you sure you want to delete this design profile?",
+        "custom_profiles" to "My Custom Profiles",
+        "preset_profiles" to "Curated Profiles",
+
+        // Google Drive Cloud Sync
+        "cloud_sync_title" to "Google Drive Cloud Sync",
+        "cloud_sync_desc" to "Back up history, design profiles & settings to Google Drive",
+        "sync_drive_now" to "Sync to Drive",
+        "restore_from_drive" to "Restore Cloud File",
+        "cloud_status_synced" to "Last Cloud Sync: %s",
+        "cloud_status_not_synced" to "No cloud backup yet",
+        "cloud_sync_success" to "Cloud backup bundle created! Choose Google Drive to upload.",
+        "cloud_restore_success" to "Successfully synced and restored %d items from cloud backup!",
 
         // Animated QR
         "anim_title" to "Animated QR File Transfer",
@@ -452,6 +499,53 @@ object Strings {
         "backup_export_success" to "فایل پشتیبان JSON آماده شد. برای ذخیره، گوگل درایو یا برنامه موردنظر را انتخاب کنید.",
         "backup_import_success" to "تعداد %d مورد از فایل پشتیبان JSON با موفقیت بازیابی شد!",
         "backup_import_error" to "خطا در خواندن فایل پشتیبان JSON.",
+        "history_backup_title" to "پشتیبان‌گیری و همگام‌سازی",
+        "cloud_drive_desc" to "گوگل درایو و فضای ابری",
+
+        // Real-time Live Preview
+        "live_preview" to "پیش‌نمایش زنده و آنی",
+        "live_preview_desc" to "تغییر و بازسازی بلادرنگ همزمان با جابجایی لغزنده‌ها و رنگ‌ها",
+        "scannability_score" to "قابلیت خوانایی",
+        "contrast_excellent" to "کنتراست عالی (۱۰۰٪)",
+        "contrast_good" to "کنتراست مطلوب (۸۵٪)",
+        "contrast_warning" to "هشدار: کنتراست کم",
+
+        // Diagnostics & Cache
+        "diagnostics_title" to "عیب‌یابی و حافظه برنامه",
+        "cache_size" to "حافظه موقت (Cache)",
+        "memory_usage" to "حافظه رم JVM",
+        "db_records" to "رکوردهای پایگاه‌داده",
+        "clear_cache_btn" to "پاکسازی حافظه موقت",
+        "cache_cleared_success" to "حافظه موقت پاکسازی شد (%s فضا آزاد شد)!",
+        "storage_healthy" to "بهینه و مطلوب",
+
+        // CSV History Export
+        "export_csv" to "خروجی اکسل (CSV)",
+        "export_csv_desc" to "خروجی کامل با جزئیات استایل و برچسب‌ها برای اکسل و Sheets",
+        "csv_export_success" to "تاریخچه به فایل اکسل CSV تبدیل شد! برنامه دلخواه یا گوگل درایو را انتخاب کنید.",
+
+        // QR Design Profiles
+        "design_profiles_title" to "پروفایل‌های طراحی",
+        "design_profiles_desc" to "ذخیره و بارگذاری استایل‌های کامل (رنگ‌ها، شکل گوشه‌ها، تصحیح خطا)",
+        "save_as_profile" to "ذخیره به عنوان پروفایل جدید",
+        "profile_name_hint" to "نام پروفایل (مثلا: آبی سازمانی، تم تاریک، نئون)...",
+        "profile_saved" to "پروفایل طراحی '%s' با موفقیت ذخیره شد!",
+        "profile_loaded" to "پروفایل طراحی '%s' اعمال گردید!",
+        "profile_deleted" to "پروفایل طراحی حذف شد",
+        "no_custom_profiles" to "هنوز پروفایل اختصاصی ذخیره نشده است. استایل دلخواه را بسازید و دکمه 'ذخیره پروفایل' را بزنید!",
+        "delete_profile_confirm" to "آیا از حذف این پروفایل طراحی اطمینان دارید؟",
+        "custom_profiles" to "پروفایل‌های من",
+        "preset_profiles" to "پروفایل‌های برگزیده",
+
+        // Google Drive Cloud Sync
+        "cloud_sync_title" to "همگام‌سازی ابری گوگل درایو",
+        "cloud_sync_desc" to "پشتیبان‌گیری تاریخچه، پروفایل‌های طراحی و تنظیمات در گوگل درایو",
+        "sync_drive_now" to "همگام‌سازی درایو",
+        "restore_from_drive" to "بازیابی فایل ابری",
+        "cloud_status_synced" to "آخرین همگام‌سازی ابری: %s",
+        "cloud_status_not_synced" to "هنوز در درایو پشتیبان گرفته نشده",
+        "cloud_sync_success" to "بسته پشتیبان ابری آماده شد! گوگل درایو را جهت آپلود انتخاب نمایید.",
+        "cloud_restore_success" to "تعداد %d آیتم و تنظیمات از فایل ابری با موفقیت بازیابی شد!",
 
         // Animated QR
         "anim_title" to "انتقال فایل با کیوآر متحرک",

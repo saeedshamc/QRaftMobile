@@ -81,6 +81,10 @@ fun QRaftAppRoot(viewModel: MainViewModel) {
     val language by viewModel.language.collectAsState()
     val themeMode by viewModel.themeMode.collectAsState()
     val isSettingsOpen by viewModel.isSettingsOpen.collectAsState()
+    val cacheSizeBytes by viewModel.cacheSizeBytes.collectAsState()
+    val memoryAllocatedMb by viewModel.memoryAllocatedMb.collectAsState()
+    val memoryMaxMb by viewModel.memoryMaxMb.collectAsState()
+    val lastCloudSyncTime by viewModel.lastCloudSyncTime.collectAsState()
 
     val navItems = listOf(
         AppTab.CREATE to Triple(Strings.get("tab_create", language), Icons.Default.AddBox, "tab_create"),
@@ -158,8 +162,16 @@ fun QRaftAppRoot(viewModel: MainViewModel) {
         SettingsDialog(
             language = language,
             themeMode = themeMode,
+            cacheSizeBytes = cacheSizeBytes,
+            memoryAllocatedMb = memoryAllocatedMb,
+            memoryMaxMb = memoryMaxMb,
+            lastCloudSyncTime = lastCloudSyncTime,
             onLanguageChange = { viewModel.setLanguage(it) },
             onThemeChange = { viewModel.setThemeMode(it) },
+            onClearCache = { viewModel.clearCache(context) },
+            onRefreshDiagnostics = { viewModel.refreshDiagnostics(context) },
+            onCloudSync = { viewModel.backupToCloud(context) },
+            onCloudRestore = { uri -> viewModel.restoreFromCloud(context, uri) },
             onClearAllData = { viewModel.clearAllLocalData(context) },
             onDismiss = { viewModel.isSettingsOpen.value = false }
         )

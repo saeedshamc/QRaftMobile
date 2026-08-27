@@ -76,6 +76,7 @@ fun CreateScreen(
     val qrStyle by viewModel.qrStyle.collectAsState()
     val previewBitmap by viewModel.previewBitmap.collectAsState()
     val payload by viewModel.encodedPayload.collectAsState()
+    val customProfiles by viewModel.customProfiles.collectAsState()
 
     var showSavePresetDialog by remember { mutableStateOf(false) }
     var presetNameInput by remember { mutableStateOf("") }
@@ -191,9 +192,13 @@ fun CreateScreen(
         StyleControlPanel(
             style = qrStyle,
             language = language,
+            customProfiles = customProfiles,
             onStyleChange = { viewModel.updateStyle(it) },
             onApplyPalette = { viewModel.applyColorPalette(it) },
-            onApplyTemplate = { viewModel.applyDesignTemplate(it, context) }
+            onApplyTemplate = { viewModel.applyDesignTemplate(it, context) },
+            onSaveProfile = { name -> viewModel.saveDesignProfile(name, context) },
+            onApplyProfile = { profile -> viewModel.applyDesignProfile(profile, context) },
+            onDeleteProfile = { id -> viewModel.deleteDesignProfile(id, context) }
         )
 
         Spacer(modifier = Modifier.height(24.dp))
