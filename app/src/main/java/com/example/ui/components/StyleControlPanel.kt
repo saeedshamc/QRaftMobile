@@ -114,7 +114,7 @@ fun StyleControlPanel(
         }
     }
 
-    val frameOptions = listOf("None", "Scan Me", "Website", "Visit Website", "Add Contact")
+    val frameOptions = listOf("None", "Scan Me", "Website", "Visit Website", "Add Contact", "Custom")
     var frameDropdownExpanded by remember { mutableStateOf(false) }
 
     val commonColors = listOf(
@@ -990,7 +990,7 @@ fun StyleControlPanel(
             }
 
             // 9. Frame & Label Banner
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(
                     text = Strings.get("frame_banner", language),
                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
@@ -1000,7 +1000,9 @@ fun StyleControlPanel(
                 Box {
                     OutlinedButton(
                         onClick = { frameDropdownExpanded = true },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("frame_banner_dropdown"),
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Text(
@@ -1010,6 +1012,7 @@ fun StyleControlPanel(
                                 "Website" -> Strings.get("frame_website", language)
                                 "Visit Website" -> Strings.get("frame_visit_website", language)
                                 "Add Contact" -> Strings.get("frame_add_contact", language)
+                                "Custom" -> Strings.get("frame_custom", language)
                                 else -> style.frameLabel
                             },
                             modifier = Modifier.weight(1f)
@@ -1031,16 +1034,78 @@ fun StyleControlPanel(
                                             "Website" -> Strings.get("frame_website", language)
                                             "Visit Website" -> Strings.get("frame_visit_website", language)
                                             "Add Contact" -> Strings.get("frame_add_contact", language)
+                                            "Custom" -> Strings.get("frame_custom", language)
                                             else -> opt
                                         }
                                     )
                                 },
                                 onClick = {
                                     frameDropdownExpanded = false
-                                    onStyleChange { it.copy(frameLabel = opt) }
+                                    if (opt == "Custom") {
+                                        onStyleChange { it.copy(frameLabel = "Custom") }
+                                    } else {
+                                        onStyleChange { it.copy(frameLabel = opt, customBannerText = "") }
+                                    }
                                 }
                             )
                         }
+                    }
+                }
+
+                // Custom Banner Text Input
+                if (style.frameLabel == "Custom" || style.customBannerText.isNotBlank()) {
+                    OutlinedTextField(
+                        value = style.customBannerText,
+                        onValueChange = { txt ->
+                            onStyleChange {
+                                it.copy(
+                                    customBannerText = txt,
+                                    frameLabel = if (txt.isBlank() && it.frameLabel == "None") "None" else "Custom"
+                                )
+                            }
+                        },
+                        label = { Text(Strings.get("custom_banner_text", language)) },
+                        placeholder = { Text(Strings.get("custom_banner_placeholder", language)) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("custom_banner_text_input"),
+                        shape = RoundedCornerShape(12.dp),
+                        singleLine = true
+                    )
+                }
+
+                // Banner Position Selector (Top vs Bottom)
+                if (style.frameLabel != "None" || style.customBannerText.isNotBlank()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = Strings.get("banner_position", language),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        FilterChip(
+                            selected = style.bannerPositionTop,
+                            onClick = { onStyleChange { it.copy(bannerPositionTop = true) } },
+                            label = { Text(Strings.get("banner_position_top", language)) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+                            )
+                        )
+
+                        FilterChip(
+                            selected = !style.bannerPositionTop,
+                            onClick = { onStyleChange { it.copy(bannerPositionTop = false) } },
+                            label = { Text(Strings.get("banner_position_bottom", language)) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primary,
+                                selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+                            )
+                        )
                     }
                 }
             }

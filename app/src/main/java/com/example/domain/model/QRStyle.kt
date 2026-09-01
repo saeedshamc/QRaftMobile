@@ -72,7 +72,9 @@ data class QRStyle(
     val eyeInnerStyle: EyeInnerStyle = EyeInnerStyle.SQUARE,
     val logoUri: String? = null,
     val logoSizePercent: Int = 20, // 10..35%
-    val frameLabel: String = "None", // None, "Scan Me", "Website", "Visit Website", "Add Contact"
+    val frameLabel: String = "None", // None, "Scan Me", "Website", "Visit Website", "Add Contact", "Custom"
+    val customBannerText: String = "",
+    val bannerPositionTop: Boolean = true,
     val watermarkText: String = "",
     val watermarkOpacity: Float = 0.5f,
     val activePaletteId: String? = "classic",

@@ -375,22 +375,66 @@ class MainViewModel(
         showToast(context, Strings.get("copied", _language.value))
     }
 
+    fun shareFileSafely(
+        context: Context,
+        file: File,
+        mimeType: String,
+        chooserTitle: String,
+        extraText: String? = null,
+        extraSubject: String? = null
+    ) {
+        viewModelScope.launch(Dispatchers.Main) {
+            try {
+                if (!file.exists() || file.length() == 0L) {
+                    showToast(context, "Error: File is empty or not found")
+                    return@launch
+                }
+                val authority = "${context.packageName}.fileprovider"
+                val uri = FileProvider.getUriForFile(context, authority, file)
+                val intent = Intent(Intent.ACTION_SEND).apply {
+                    type = mimeType
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    if (!extraText.isNullOrBlank()) putExtra(Intent.EXTRA_TEXT, extraText)
+                    if (!extraSubject.isNullOrBlank()) putExtra(Intent.EXTRA_SUBJECT, extraSubject)
+                    clipData = ClipData.newRawUri(chooserTitle, uri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                val chooser = Intent.createChooser(intent, chooserTitle).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                context.startActivity(chooser)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                showToast(context, "Share error: ${e.localizedMessage ?: "Unknown"}")
+            }
+        }
+    }
+
     fun shareGeneratedQR(context: Context) {
         val bitmap = _previewBitmap.value ?: return
         viewModelScope.launch(Dispatchers.IO) {
-            val file = saveBitmapToCache(context, bitmap, "qraft_share_${System.currentTimeMillis()}.png")
-            if (file != null) {
-                val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-                val intent = Intent(Intent.ACTION_SEND).apply {
-                    type = "image/png"
-                    putExtra(Intent.EXTRA_STREAM, uri)
-                    putExtra(Intent.EXTRA_TEXT, _encodedPayload.value)
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            try {
+                val file = saveBitmapToCache(context, bitmap, "qraft_share_${System.currentTimeMillis()}.png")
+                if (file != null) {
+                    shareFileSafely(
+                        context = context,
+                        file = file,
+                        mimeType = "image/png",
+                        chooserTitle = "Share QR Code",
+                        extraText = _encodedPayload.value
+                    )
+                    recordGeneration()
+                } else {
+                    withContext(Dispatchers.Main) {
+                        showToast(context, "Failed to generate image file for sharing")
+                    }
                 }
-                val chooser = Intent.createChooser(intent, "Share QR Code")
-                chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                context.startActivity(chooser)
-                recordGeneration()
+            } catch (e: Exception) {
+                e.printStackTrace()
+                withContext(Dispatchers.Main) {
+                    showToast(context, "Share error: ${e.localizedMessage}")
+                }
             }
         }
     }
@@ -399,25 +443,33 @@ class MainViewModel(
         val payload = _encodedPayload.value
         if (payload.isBlank()) return
         viewModelScope.launch(Dispatchers.IO) {
-            val exportBmp = QRGeneratorEngine.generateQRBitmap(
-                content = payload,
-                style = _qrStyle.value,
-                context = context,
-                forcedSize = _qrStyle.value.exportResolution
-            ) ?: _previewBitmap.value ?: return@launch
+            try {
+                val exportBmp = try {
+                    QRGeneratorEngine.generateQRBitmap(
+                        content = payload,
+                        style = _qrStyle.value,
+                        context = context,
+                        forcedSize = _qrStyle.value.exportResolution
+                    )
+                } catch (e: OutOfMemoryError) {
+                    null
+                } ?: _previewBitmap.value ?: return@launch
 
-            val file = saveBitmapToCache(context, exportBmp, "qraft_${System.currentTimeMillis()}.png", Bitmap.CompressFormat.PNG)
-            if (file != null) {
-                val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-                val intent = Intent(Intent.ACTION_SEND).apply {
-                    type = "image/png"
-                    putExtra(Intent.EXTRA_STREAM, uri)
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                val file = saveBitmapToCache(context, exportBmp, "qraft_${System.currentTimeMillis()}.png", Bitmap.CompressFormat.PNG)
+                if (file != null) {
+                    shareFileSafely(
+                        context = context,
+                        file = file,
+                        mimeType = "image/png",
+                        chooserTitle = "Save or Export PNG"
+                    )
+                    recordGeneration()
                 }
-                val chooser = Intent.createChooser(intent, "Save or Export PNG")
-                chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                context.startActivity(chooser)
-                recordGeneration()
+            } catch (e: Exception) {
+                e.printStackTrace()
+                withContext(Dispatchers.Main) {
+                    showToast(context, "Export error: ${e.localizedMessage}")
+                }
             }
         }
     }
@@ -426,25 +478,33 @@ class MainViewModel(
         val payload = _encodedPayload.value
         if (payload.isBlank()) return
         viewModelScope.launch(Dispatchers.IO) {
-            val exportBmp = QRGeneratorEngine.generateQRBitmap(
-                content = payload,
-                style = _qrStyle.value,
-                context = context,
-                forcedSize = _qrStyle.value.exportResolution
-            ) ?: _previewBitmap.value ?: return@launch
+            try {
+                val exportBmp = try {
+                    QRGeneratorEngine.generateQRBitmap(
+                        content = payload,
+                        style = _qrStyle.value,
+                        context = context,
+                        forcedSize = _qrStyle.value.exportResolution
+                    )
+                } catch (e: OutOfMemoryError) {
+                    null
+                } ?: _previewBitmap.value ?: return@launch
 
-            val file = saveBitmapToCache(context, exportBmp, "qraft_${System.currentTimeMillis()}.jpg", Bitmap.CompressFormat.JPEG)
-            if (file != null) {
-                val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-                val intent = Intent(Intent.ACTION_SEND).apply {
-                    type = "image/jpeg"
-                    putExtra(Intent.EXTRA_STREAM, uri)
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                val file = saveBitmapToCache(context, exportBmp, "qraft_${System.currentTimeMillis()}.jpg", Bitmap.CompressFormat.JPEG)
+                if (file != null) {
+                    shareFileSafely(
+                        context = context,
+                        file = file,
+                        mimeType = "image/jpeg",
+                        chooserTitle = "Save or Export JPG"
+                    )
+                    recordGeneration()
                 }
-                val chooser = Intent.createChooser(intent, "Save or Export JPG")
-                chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                context.startActivity(chooser)
-                recordGeneration()
+            } catch (e: Exception) {
+                e.printStackTrace()
+                withContext(Dispatchers.Main) {
+                    showToast(context, "Export error: ${e.localizedMessage}")
+                }
             }
         }
     }
@@ -453,19 +513,23 @@ class MainViewModel(
         val payload = _encodedPayload.value
         if (payload.isBlank()) return
         viewModelScope.launch(Dispatchers.IO) {
-            val svgStr = QRSvgExporter.generateSvgString(payload, _qrStyle.value)
-            val file = File(context.cacheDir, "qraft_${System.currentTimeMillis()}.svg")
-            file.writeText(svgStr)
-            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-            val intent = Intent(Intent.ACTION_SEND).apply {
-                type = "image/svg+xml"
-                putExtra(Intent.EXTRA_STREAM, uri)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            try {
+                val svgStr = QRSvgExporter.generateSvgString(payload, _qrStyle.value)
+                val file = File(context.cacheDir, "qraft_${System.currentTimeMillis()}.svg")
+                file.writeText(svgStr)
+                shareFileSafely(
+                    context = context,
+                    file = file,
+                    mimeType = "image/svg+xml",
+                    chooserTitle = "Export SVG Vector"
+                )
+                recordGeneration()
+            } catch (e: Exception) {
+                e.printStackTrace()
+                withContext(Dispatchers.Main) {
+                    showToast(context, "SVG Export error: ${e.localizedMessage}")
+                }
             }
-            val chooser = Intent.createChooser(intent, "Export SVG Vector")
-            chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            context.startActivity(chooser)
-            recordGeneration()
         }
     }
 
@@ -473,23 +537,27 @@ class MainViewModel(
         val bitmap = _previewBitmap.value ?: return
         val payload = _encodedPayload.value
         viewModelScope.launch(Dispatchers.IO) {
-            val pdfFile = QRPdfExporter.exportToPdfFile(
-                context,
-                bitmap,
-                _selectedContentType.value.name,
-                payload
-            )
-            if (pdfFile != null) {
-                val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", pdfFile)
-                val intent = Intent(Intent.ACTION_SEND).apply {
-                    type = "application/pdf"
-                    putExtra(Intent.EXTRA_STREAM, uri)
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            try {
+                val pdfFile = QRPdfExporter.exportToPdfFile(
+                    context,
+                    bitmap,
+                    _selectedContentType.value.name,
+                    payload
+                )
+                if (pdfFile != null) {
+                    shareFileSafely(
+                        context = context,
+                        file = pdfFile,
+                        mimeType = "application/pdf",
+                        chooserTitle = "Export PDF Document"
+                    )
+                    recordGeneration()
                 }
-                val chooser = Intent.createChooser(intent, "Export PDF Document")
-                chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                context.startActivity(chooser)
-                recordGeneration()
+            } catch (e: Exception) {
+                e.printStackTrace()
+                withContext(Dispatchers.Main) {
+                    showToast(context, "PDF Export error: ${e.localizedMessage}")
+                }
             }
         }
     }
@@ -1134,16 +1202,12 @@ class MainViewModel(
     }
 
     fun shareBatchZip(context: Context, file: File) {
-        if (!file.exists()) return
-        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-        val intent = Intent(Intent.ACTION_SEND).apply {
-            type = "application/zip"
-            putExtra(Intent.EXTRA_STREAM, uri)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-        val chooser = Intent.createChooser(intent, "Share Batch ZIP Archive")
-        chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        context.startActivity(chooser)
+        shareFileSafely(
+            context = context,
+            file = file,
+            mimeType = "application/zip",
+            chooserTitle = "Share Batch ZIP Archive"
+        )
     }
 
     // Animated QR Encode Functions
@@ -1232,15 +1296,12 @@ class MainViewModel(
                 withContext(Dispatchers.Main) {
                     isGifExporting.value = false
                     if (exportedFile != null && exportedFile.exists() && exportedFile.length() > 0) {
-                        val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", exportedFile)
-                        val intent = Intent(Intent.ACTION_SEND).apply {
-                            type = "image/gif"
-                            putExtra(Intent.EXTRA_STREAM, uri)
-                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                        }
-                        val chooser = Intent.createChooser(intent, "Export Animated GIF")
-                        chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        context.startActivity(chooser)
+                        shareFileSafely(
+                            context = context,
+                            file = exportedFile,
+                            mimeType = "image/gif",
+                            chooserTitle = "Export Animated GIF"
+                        )
                     } else {
                         showToast(context, "Failed to export GIF")
                     }
@@ -1265,21 +1326,25 @@ class MainViewModel(
     fun exportAnimatedFramesZip(context: Context) {
         val result = _animEncodeResult.value ?: return
         viewModelScope.launch(Dispatchers.Default) {
-            val file = AnimatedQREngine.exportFramesToZip(
-                context = context,
-                frames = result.frames,
-                sessionId = result.sessionId
-            )
-            if (file != null) {
-                val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-                val intent = Intent(Intent.ACTION_SEND).apply {
-                    type = "application/zip"
-                    putExtra(Intent.EXTRA_STREAM, uri)
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            try {
+                val file = AnimatedQREngine.exportFramesToZip(
+                    context = context,
+                    frames = result.frames,
+                    sessionId = result.sessionId
+                )
+                if (file != null) {
+                    shareFileSafely(
+                        context = context,
+                        file = file,
+                        mimeType = "application/zip",
+                        chooserTitle = "Export Frames ZIP"
+                    )
                 }
-                val chooser = Intent.createChooser(intent, "Export Frames ZIP")
-                chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                context.startActivity(chooser)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                withContext(Dispatchers.Main) {
+                    showToast(context, "ZIP Export error: ${e.localizedMessage}")
+                }
             }
         }
     }
@@ -1307,17 +1372,21 @@ class MainViewModel(
 
     fun saveReconstructedImage(context: Context, bitmap: Bitmap) {
         viewModelScope.launch(Dispatchers.IO) {
-            val file = saveBitmapToCache(context, bitmap, "qraft_reconstructed_${System.currentTimeMillis()}.jpg")
-            if (file != null) {
-                val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-                val intent = Intent(Intent.ACTION_SEND).apply {
-                    type = "image/jpeg"
-                    putExtra(Intent.EXTRA_STREAM, uri)
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            try {
+                val file = saveBitmapToCache(context, bitmap, "qraft_reconstructed_${System.currentTimeMillis()}.jpg")
+                if (file != null) {
+                    shareFileSafely(
+                        context = context,
+                        file = file,
+                        mimeType = "image/jpeg",
+                        chooserTitle = "Save Reconstructed Image"
+                    )
                 }
-                val chooser = Intent.createChooser(intent, "Save Reconstructed Image")
-                chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                context.startActivity(chooser)
+            } catch (e: Exception) {
+                e.printStackTrace()
+                withContext(Dispatchers.Main) {
+                    showToast(context, "Save error: ${e.localizedMessage}")
+                }
             }
         }
     }
@@ -1368,6 +1437,8 @@ class MainViewModel(
         obj.put("logoUri", style.logoUri ?: "")
         obj.put("logoSize", style.logoSizePercent)
         obj.put("frame", style.frameLabel)
+        obj.put("customBanner", style.customBannerText)
+        obj.put("bannerTop", style.bannerPositionTop)
         obj.put("wm", style.watermarkText)
         obj.put("wmAlpha", style.watermarkOpacity.toDouble())
         obj.put("palette", style.activePaletteId ?: "")
@@ -1394,6 +1465,8 @@ class MainViewModel(
                 logoUri = obj.optString("logoUri").ifEmpty { null },
                 logoSizePercent = obj.optInt("logoSize", 20),
                 frameLabel = obj.optString("frame", "None"),
+                customBannerText = obj.optString("customBanner", ""),
+                bannerPositionTop = obj.optBoolean("bannerTop", true),
                 watermarkText = obj.optString("wm", ""),
                 watermarkOpacity = obj.optDouble("wmAlpha", 0.5).toFloat(),
                 activePaletteId = obj.optString("palette").ifEmpty { null },

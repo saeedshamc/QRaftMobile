@@ -57,9 +57,21 @@ object QRGeneratorEngine {
             val matrixHeight = bitMatrix.height
             val outputSize = (forcedSize ?: style.sizePx).coerceIn(150, 4096)
 
-            val hasFrame = style.frameLabel != "None" && style.frameLabel.isNotBlank()
-            val frameExtraHeight = if (hasFrame) (outputSize * 0.18f).toInt() else 0
-            val totalBitmapHeight = outputSize + frameExtraHeight
+            val effectiveBannerText = if (style.customBannerText.isNotBlank()) {
+                style.customBannerText.trim()
+            } else if (style.frameLabel != "None" && style.frameLabel.isNotBlank()) {
+                style.frameLabel.trim()
+            } else {
+                ""
+            }
+            val hasFrame = effectiveBannerText.isNotBlank()
+            val isBannerTop = style.bannerPositionTop || isTopBanner(style.frameLabel)
+            val frameExtraHeight = if (hasFrame) (outputSize * 0.16f).toInt().coerceAtLeast(36) else 0
+
+            val hasWatermark = style.watermarkText.isNotBlank()
+            val watermarkExtraHeight = if (hasWatermark) (outputSize * 0.08f).toInt().coerceAtLeast(28) else 0
+
+            val totalBitmapHeight = outputSize + frameExtraHeight + watermarkExtraHeight
 
             val bitmap = Bitmap.createBitmap(outputSize, totalBitmapHeight, Bitmap.Config.ARGB_8888)
             val canvas = Canvas(bitmap)
@@ -73,8 +85,8 @@ object QRGeneratorEngine {
                 canvas.drawRect(0f, 0f, outputSize.toFloat(), totalBitmapHeight.toFloat(), bgPaint)
             }
 
-            // QR area
-            val qrAreaTop = if (hasFrame && isTopBanner(style.frameLabel)) frameExtraHeight.toFloat() else 0f
+            // Calculate Vertical Positions
+            val qrAreaTop = if (hasFrame && isBannerTop) frameExtraHeight.toFloat() else 0f
             val qrAreaRect = RectF(0f, qrAreaTop, outputSize.toFloat(), qrAreaTop + outputSize)
 
             // Foreground Paint (Color or Gradient)
@@ -120,9 +132,6 @@ object QRGeneratorEngine {
             val moduleSizeY = outputSize.toFloat() / matrixHeight
 
             // Track eye regions (7x7 modules each)
-            // Top-left: (margin .. margin+6, margin .. margin+6)
-            // Top-right: (matrixWidth - margin - 7 .. matrixWidth - margin - 1, margin .. margin+6)
-            // Bottom-left: (margin .. margin+6, matrixHeight - margin - 7 .. matrixHeight - margin - 1)
             val m = style.margin
             val tlEye = Rect(m, m, m + 7, m + 7)
             val trEye = Rect(matrixWidth - m - 7, m, matrixWidth - m, m + 7)
@@ -181,14 +190,20 @@ object QRGeneratorEngine {
                 drawCenterLogo(canvas, context, style.logoUri, qrAreaRect, style.logoSizePercent, style.bgColor.toInt())
             }
 
-            // Frame and Banner Label
+            // Frame and Banner Label (Positioned Top or Bottom)
             if (hasFrame) {
-                drawFrameBanner(canvas, style.frameLabel, outputSize, totalBitmapHeight, style.fgColor.toInt(), style.bgColor.toInt(), qrAreaTop > 0)
+                val bannerTop = if (isBannerTop) 0f else qrAreaTop + outputSize
+                drawFrameBanner(canvas, effectiveBannerText, outputSize, frameExtraHeight, bannerTop, style.fgColor.toInt(), style.bgColor.toInt())
             }
 
-            // Watermark
-            if (style.watermarkText.isNotBlank()) {
-                drawWatermark(canvas, style.watermarkText, style.watermarkOpacity, outputSize, totalBitmapHeight, style.fgColor.toInt())
+            // Watermark (Positioned Cleanly at Bottom below QR Code / Bottom Banner)
+            if (hasWatermark) {
+                val watermarkTop = if (hasFrame && !isBannerTop) {
+                    qrAreaTop + outputSize + frameExtraHeight
+                } else {
+                    qrAreaTop + outputSize
+                }
+                drawWatermark(canvas, style.watermarkText, style.watermarkOpacity, outputSize, watermarkTop, watermarkExtraHeight.toFloat(), style.fgColor.toInt())
             }
 
             bitmap
@@ -395,35 +410,28 @@ object QRGeneratorEngine {
         canvas: Canvas,
         label: String,
         width: Int,
-        totalHeight: Int,
+        bannerHeight: Int,
+        bannerTop: Float,
         fgColor: Int,
-        bgColor: Int,
-        isTop: Boolean
+        bgColor: Int
     ) {
-        val bannerHeight = (width * 0.18f)
-        val bannerRect = if (isTop) {
-            RectF(0f, 0f, width.toFloat(), bannerHeight)
-        } else {
-            RectF(0f, totalHeight - bannerHeight, width.toFloat(), totalHeight.toFloat())
-        }
-
         val bannerPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = fgColor
             style = Paint.Style.FILL
         }
-        val pillMargin = 12f
+        val pillMargin = 14f
         val pillRect = RectF(
             pillMargin,
-            bannerRect.top + 6f,
+            bannerTop + 6f,
             width - pillMargin,
-            bannerRect.bottom - 6f
+            bannerTop + bannerHeight - 6f
         )
         val r = pillRect.height() / 2f
         canvas.drawRoundRect(pillRect, r, r, bannerPaint)
 
         val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = if (Color.luminance(fgColor) > 0.6f) Color.BLACK else Color.WHITE
-            textSize = bannerHeight * 0.42f
+            textSize = bannerHeight * 0.44f
             textAlign = Paint.Align.CENTER
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
         }
@@ -436,17 +444,36 @@ object QRGeneratorEngine {
         text: String,
         opacity: Float,
         width: Int,
-        height: Int,
+        watermarkTop: Float,
+        watermarkHeight: Float,
         fgColor: Int
     ) {
-        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        val watermarkRect = RectF(0f, watermarkTop, width.toFloat(), watermarkTop + watermarkHeight)
+        
+        // Subtle divider or subtle pill background
+        val pillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             color = fgColor
-            alpha = (opacity.coerceIn(0f, 1f) * 255).toInt()
-            textSize = (width * 0.032f).coerceAtLeast(14f)
-            textAlign = Paint.Align.RIGHT
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.ITALIC)
+            alpha = (opacity.coerceIn(0.1f, 1f) * 40).toInt()
+            style = Paint.Style.FILL
         }
-        canvas.drawText(text, width - 16f, height - 16f, paint)
+        val pill = RectF(
+            width * 0.08f,
+            watermarkRect.top + 4f,
+            width * 0.92f,
+            watermarkRect.bottom - 4f
+        )
+        val radius = pill.height() / 2f
+        canvas.drawRoundRect(pill, radius, radius, pillPaint)
+
+        val textPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = fgColor
+            alpha = (opacity.coerceIn(0.2f, 1f) * 255).toInt()
+            textSize = (watermarkHeight * 0.42f).coerceAtLeast(13f)
+            textAlign = Paint.Align.CENTER
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD_ITALIC)
+        }
+        val textY = watermarkRect.centerY() - ((textPaint.descent() + textPaint.ascent()) / 2f)
+        canvas.drawText(text, watermarkRect.centerX(), textY, textPaint)
     }
 
     fun decodeQrFromBitmap(bitmap: Bitmap): String? {
