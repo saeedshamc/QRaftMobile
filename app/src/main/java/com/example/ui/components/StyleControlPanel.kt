@@ -2,6 +2,7 @@ package com.example.ui.components
 
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.Image
@@ -30,6 +31,7 @@ import androidx.compose.material.icons.filled.ColorLens
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -59,13 +61,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.example.R
 import com.example.domain.model.ColorPalettePreset
 import com.example.domain.model.ColorPalettes
@@ -100,15 +105,31 @@ fun StyleControlPanel(
 ) {
     var showSaveProfileDialog by remember { mutableStateOf(false) }
     var profileNameInput by remember { mutableStateOf("") }
+    var activeColorPickerTarget by remember { mutableStateOf<ColorPickerTarget?>(null) }
 
-    val logoPickerLauncher = rememberLauncherForActivityResult(
+    // Modern Zero-Permission Photo Picker (Android 13+ and backported to API 19 via Google Play Services)
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            onStyleChange {
+                it.copy(
+                    logoUri = uri.toString(),
+                    errorCorrection = ErrorCorrection.H // elevate to 30% tolerance for center logo
+                )
+            }
+        }
+    }
+
+    // Fallback document/content picker
+    val getContentLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
         if (uri != null) {
             onStyleChange {
                 it.copy(
                     logoUri = uri.toString(),
-                    errorCorrection = ErrorCorrection.H // bump to H for scannability
+                    errorCorrection = ErrorCorrection.H
                 )
             }
         }
@@ -118,9 +139,9 @@ fun StyleControlPanel(
     var frameDropdownExpanded by remember { mutableStateOf(false) }
 
     val commonColors = listOf(
-        0xFF000000, 0xFF1E293B, 0xFF1D4ED8, 0xFF047857,
-        0xFFBE123C, 0xFF6D28D9, 0xFF0D9488, 0xFF78350F,
-        0xFFFFFFFF, 0xFFF8FAFC, 0xFFF0FDF4, 0xFFFFF1F2
+        0xFF000000L, 0xFF1E293BL, 0xFF1D4ED8L, 0xFF047857L,
+        0xFFBE123CL, 0xFF6D28D9L, 0xFF0D9488L, 0xFF78350FL,
+        0xFFFFFFFFL, 0xFFF8FAFCL, 0xFFF0FDF4L, 0xFFFFF1F2L
     )
 
     // Calculate contrast ratio between FG and BG for scannability
@@ -792,7 +813,44 @@ fun StyleControlPanel(
                     }
                 }
 
-                // Foreground & Gradient End Color Pickers
+                // Foreground Color Label & Custom Color Button
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = Strings.get("fg_color", language),
+                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        val fgHexFormatted = String.format("#%06X", (style.fgColor and 0xFFFFFFL))
+                        Text(
+                            text = fgHexFormatted,
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontFamily = FontFamily.Monospace,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        )
+                    }
+
+                    OutlinedButton(
+                        onClick = { activeColorPickerTarget = ColorPickerTarget.FOREGROUND },
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier.testTag("custom_fg_color_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.ColorLens,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(Strings.get("custom_color", language), fontSize = 12.sp)
+                    }
+                }
+
+                // Foreground Color Palette Swatches
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -801,7 +859,7 @@ fun StyleControlPanel(
                 ) {
                     commonColors.take(8).forEach { colorHex ->
                         val color = Color(colorHex.toInt())
-                        val isSelected = style.fgColor == colorHex
+                        val isSelected = (style.fgColor and 0xFFFFFFL) == (colorHex and 0xFFFFFFL)
                         Box(
                             modifier = Modifier
                                 .size(36.dp)
@@ -819,8 +877,102 @@ fun StyleControlPanel(
                                             activePaletteId = null
                                         )
                                     }
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (isSelected) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = null,
+                                    tint = if (color.red < 0.5f) Color.White else Color.Black,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // If Gradient Mode is ON, show Gradient End Color Picker
+                if (style.gradientMode) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = Strings.get("gradient_end", language),
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            val gradEndHexFormatted = String.format("#%06X", (style.gradientEndColor and 0xFFFFFFL))
+                            Text(
+                                text = gradEndHexFormatted,
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontFamily = FontFamily.Monospace,
+                                    color = MaterialTheme.colorScheme.secondary
+                                )
+                            )
+                        }
+
+                        OutlinedButton(
+                            onClick = { activeColorPickerTarget = ColorPickerTarget.GRADIENT_END },
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.testTag("custom_gradient_color_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ColorLens,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(Strings.get("custom_color", language), fontSize = 12.sp)
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf(
+                            0xFF1D4ED8L, 0xFF7C3AEDL, 0xFFEC4899L, 0xFFF59E0BL,
+                            0xFF10B981L, 0xFF06B6D4L, 0xFFEF4444L, 0xFF3B82F6L
+                        ).forEach { colorHex ->
+                            val color = Color(colorHex.toInt())
+                            val isSelected = (style.gradientEndColor and 0xFFFFFFL) == (colorHex and 0xFFFFFFL)
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(CircleShape)
+                                    .background(color)
+                                    .border(
+                                        width = if (isSelected) 3.dp else 1.dp,
+                                        color = if (isSelected) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.outline,
+                                        shape = CircleShape
+                                    )
+                                    .clickable {
+                                        onStyleChange {
+                                            it.copy(
+                                                gradientEndColor = colorHex,
+                                                activePaletteId = null
+                                            )
+                                        }
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (isSelected) {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = null,
+                                        tint = if (color.red < 0.5f) Color.White else Color.Black,
+                                        modifier = Modifier.size(16.dp)
+                                    )
                                 }
-                        )
+                            }
+                        }
                     }
                 }
             }
@@ -838,11 +990,48 @@ fun StyleControlPanel(
                     )
                     Switch(
                         checked = style.transparentBg,
-                        onCheckedChange = { onStyleChange { s -> s.copy(transparentBg = it) } }
+                        onCheckedChange = { onStyleChange { s -> s.copy(transparentBg = it) } },
+                        modifier = Modifier.testTag("transparent_bg_switch")
                     )
                 }
 
                 if (!style.transparentBg) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = Strings.get("bg_color", language),
+                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            val bgHexFormatted = String.format("#%06X", (style.bgColor and 0xFFFFFFL))
+                            Text(
+                                text = bgHexFormatted,
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontFamily = FontFamily.Monospace,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            )
+                        }
+
+                        OutlinedButton(
+                            onClick = { activeColorPickerTarget = ColorPickerTarget.BACKGROUND },
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.testTag("custom_bg_color_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ColorLens,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(Strings.get("custom_color", language), fontSize = 12.sp)
+                        }
+                    }
+
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -851,7 +1040,7 @@ fun StyleControlPanel(
                     ) {
                         commonColors.takeLast(8).forEach { colorHex ->
                             val color = Color(colorHex.toInt())
-                            val isSelected = style.bgColor == colorHex
+                            val isSelected = (style.bgColor and 0xFFFFFFL) == (colorHex and 0xFFFFFFL)
                             Box(
                                 modifier = Modifier
                                     .size(36.dp)
@@ -869,15 +1058,25 @@ fun StyleControlPanel(
                                                 activePaletteId = null
                                             )
                                         }
-                                    }
-                            )
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (isSelected) {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = null,
+                                        tint = if (color.red < 0.5f) Color.White else Color.Black,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                }
+                            }
                         }
                     }
                 }
             }
 
-            // 8. Brand Preset Logos & Center Logo Overlay
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            // 8. Brand Preset Logos & Gallery Custom Logo Overlay
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text(
                     text = Strings.get("preset_brand_logos", language),
                     style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
@@ -923,42 +1122,110 @@ fun StyleControlPanel(
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = MaterialTheme.colorScheme.primary,
                                 selectedLabelColor = MaterialTheme.colorScheme.onPrimary
-                            )
+                            ),
+                            modifier = Modifier.testTag("preset_logo_${label.lowercase()}")
                         )
                     }
                 }
 
-                // Custom Logo File Picker & Remove
-                Row(
+                // Custom Gallery Logo Overlay Card / Action
+                val isCustomGalleryLogo = style.logoUri != null && !style.logoUri.startsWith("preset:")
+                Card(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (isCustomGalleryLogo) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.35f)
+                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                    )
                 ) {
-                    val isCustom = style.logoUri != null && !style.logoUri.startsWith("preset:")
-                    FilledTonalButton(
-                        onClick = { logoPickerLauncher.launch("image/*") },
-                        modifier = Modifier.weight(1f)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.AddPhotoAlternate,
-                            contentDescription = null,
-                            modifier = Modifier.padding(end = 6.dp)
-                        )
-                        Text(
-                            text = if (isCustom) "Change Image" else Strings.get("choose_logo", language),
-                            style = MaterialTheme.typography.labelMedium
-                        )
-                    }
-
-                    if (style.logoUri != null) {
-                        IconButton(
-                            onClick = { onStyleChange { it.copy(logoUri = null) } }
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Delete,
-                                contentDescription = Strings.get("remove_logo", language),
-                                tint = MaterialTheme.colorScheme.error
+                        if (isCustomGalleryLogo) {
+                            // Display selected gallery image thumbnail
+                            AsyncImage(
+                                model = style.logoUri,
+                                contentDescription = "Custom Logo Preview",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color.White)
+                                    .border(1.5.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp))
                             )
+                        } else {
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+                                modifier = Modifier.size(48.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.AddPhotoAlternate,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(24.dp)
+                                    )
+                                }
+                            }
+                        }
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = if (isCustomGalleryLogo) Strings.get("change_logo", language) else Strings.get("choose_from_gallery", language),
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                            )
+                            Text(
+                                text = Strings.get("logo_tip", language),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            FilledTonalButton(
+                                onClick = {
+                                    try {
+                                        photoPickerLauncher.launch(
+                                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                        )
+                                    } catch (_: Exception) {
+                                        getContentLauncher.launch("image/*")
+                                    }
+                                },
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.testTag("pick_gallery_logo_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.AddPhotoAlternate,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = if (isCustomGalleryLogo) Strings.get("change_logo", language) else Strings.get("choose_logo", language),
+                                    fontSize = 12.sp
+                                )
+                            }
+
+                            if (style.logoUri != null) {
+                                IconButton(
+                                    onClick = { onStyleChange { it.copy(logoUri = null) } },
+                                    modifier = Modifier.testTag("remove_logo_button")
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = Strings.get("remove_logo", language),
+                                        tint = MaterialTheme.colorScheme.error
+                                    )
+                                }
+                            }
                         }
                     }
                 }
@@ -983,7 +1250,8 @@ fun StyleControlPanel(
                             value = style.logoSizePercent.toFloat(),
                             onValueChange = { onStyleChange { s -> s.copy(logoSizePercent = it.toInt()) } },
                             valueRange = 10f..35f,
-                            steps = 5
+                            steps = 5,
+                            modifier = Modifier.testTag("logo_size_slider")
                         )
                     }
                 }
@@ -1150,6 +1418,37 @@ fun StyleControlPanel(
                 }
             }
         }
+    }
+
+    if (activeColorPickerTarget != null) {
+        val target = activeColorPickerTarget!!
+        val initialHex = when (target) {
+            ColorPickerTarget.FOREGROUND -> style.fgColor
+            ColorPickerTarget.BACKGROUND -> style.bgColor
+            ColorPickerTarget.GRADIENT_END -> style.gradientEndColor
+        }
+        val oppositeHex = when (target) {
+            ColorPickerTarget.FOREGROUND -> if (style.transparentBg) 0xFFFFFFFFL else style.bgColor
+            ColorPickerTarget.BACKGROUND -> style.fgColor
+            ColorPickerTarget.GRADIENT_END -> if (style.transparentBg) 0xFFFFFFFFL else style.bgColor
+        }
+
+        QRColorPickerDialog(
+            target = target,
+            initialColorHex = initialHex,
+            oppositeColorHex = oppositeHex,
+            language = language,
+            onDismiss = { activeColorPickerTarget = null },
+            onColorSelected = { selectedColor ->
+                onStyleChange { currentStyle ->
+                    when (target) {
+                        ColorPickerTarget.FOREGROUND -> currentStyle.copy(fgColor = selectedColor, activePaletteId = null)
+                        ColorPickerTarget.BACKGROUND -> currentStyle.copy(bgColor = selectedColor, activePaletteId = null)
+                        ColorPickerTarget.GRADIENT_END -> currentStyle.copy(gradientEndColor = selectedColor, activePaletteId = null)
+                    }
+                }
+            }
+        )
     }
 
     if (showSaveProfileDialog) {

@@ -351,7 +351,8 @@ fun HistoryScreen(
             FilledTonalIconButton(
                 onClick = {
                     if (selectedTabIndex == 0) showClearHistoryDialog = true else showClearPresetsDialog = true
-                }
+                },
+                modifier = Modifier.testTag("clear_all_button")
             ) {
                 Icon(
                     imageVector = Icons.Default.DeleteSweep,
@@ -426,13 +427,17 @@ fun HistoryScreen(
                     onClick = {
                         viewModel.clearAllHistory()
                         showClearHistoryDialog = false
-                    }
+                    },
+                    modifier = Modifier.testTag("confirm_clear_all_button")
                 ) {
                     Text(Strings.get("clear_all", language), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showClearHistoryDialog = false }) {
+                TextButton(
+                    onClick = { showClearHistoryDialog = false },
+                    modifier = Modifier.testTag("cancel_clear_all_button")
+                ) {
                     Text(Strings.get("cancel", language))
                 }
             }
