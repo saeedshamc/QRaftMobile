@@ -292,7 +292,8 @@ object AnimatedQREngine {
         onProgress: ((current: Int, total: Int) -> Unit)? = null,
         isCancelled: (() -> Boolean)? = null
     ): File? {
-        val zipFile = File(context.cacheDir, "qraft_animated_${sessionId}.zip")
+        val exportDir = QRFileExportManager.getExportCacheDir(context)
+        val zipFile = File(exportDir, "qraft_animated_${sessionId}.zip")
         return try {
             val zos = ZipOutputStream(BufferedOutputStream(FileOutputStream(zipFile), 65536))
             for (i in frames.indices) {
@@ -339,7 +340,8 @@ object AnimatedQREngine {
         isCancelled: (() -> Boolean)? = null
     ): File? {
         if (frames.isEmpty()) return null
-        val gifFile = File(context.cacheDir, "qraft_animated_${sessionId}.gif")
+        val exportDir = QRFileExportManager.getExportCacheDir(context)
+        val gifFile = File(exportDir, "qraft_animated_${sessionId}.gif")
 
         return try {
             val bos = BufferedOutputStream(FileOutputStream(gifFile), 65536) // 64KB streaming buffer

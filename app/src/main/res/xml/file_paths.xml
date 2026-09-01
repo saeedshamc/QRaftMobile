@@ -1,7 +1,22 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
-    <cache-path name="cache_files" path="." />
-    <files-path name="internal_files" path="." />
-    <external-files-path name="external_files" path="." />
-    <external-cache-path name="external_cache" path="." />
+    <!-- Application Internal Cache Directory (e.g. context.cacheDir, context.cacheDir/qr_exports) -->
+    <cache-path
+        name="cache_files"
+        path="." />
+
+    <!-- Application External Cache Directory (e.g. context.externalCacheDir) -->
+    <external-cache-path
+        name="external_cache_files"
+        path="." />
+
+    <!-- Application Internal Files Directory (e.g. context.filesDir) -->
+    <files-path
+        name="internal_files"
+        path="." />
+
+    <!-- Application External Files Directory -->
+    <external-files-path
+        name="external_files"
+        path="." />
 </paths>

@@ -68,7 +68,8 @@ object QRPdfExporter {
 
             pdfDocument.finishPage(page)
 
-            val file = File(context.cacheDir, "qraft_${System.currentTimeMillis()}.pdf")
+            val exportDir = QRFileExportManager.getExportCacheDir(context)
+            val file = File(exportDir, "qraft_${System.currentTimeMillis()}.pdf")
             val outputStream = FileOutputStream(file)
             pdfDocument.writeTo(outputStream)
             outputStream.flush()

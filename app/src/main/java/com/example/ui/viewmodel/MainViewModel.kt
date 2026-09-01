@@ -29,6 +29,7 @@ import com.example.domain.engine.CsvBatchRow
 import com.example.domain.engine.CsvHistoryExporter
 import com.example.domain.engine.DecodeSessionState
 import com.example.domain.engine.GifFrameExtractor
+import com.example.domain.engine.QRFileExportManager
 import com.example.domain.engine.QRGeneratorEngine
 import com.example.domain.engine.QRPdfExporter
 import com.example.domain.engine.QRSvgExporter
@@ -384,30 +385,14 @@ class MainViewModel(
         extraSubject: String? = null
     ) {
         viewModelScope.launch(Dispatchers.Main) {
-            try {
-                if (!file.exists() || file.length() == 0L) {
-                    showToast(context, "Error: File is empty or not found")
-                    return@launch
-                }
-                val authority = "${context.packageName}.fileprovider"
-                val uri = FileProvider.getUriForFile(context, authority, file)
-                val intent = Intent(Intent.ACTION_SEND).apply {
-                    type = mimeType
-                    putExtra(Intent.EXTRA_STREAM, uri)
-                    if (!extraText.isNullOrBlank()) putExtra(Intent.EXTRA_TEXT, extraText)
-                    if (!extraSubject.isNullOrBlank()) putExtra(Intent.EXTRA_SUBJECT, extraSubject)
-                    clipData = ClipData.newRawUri(chooserTitle, uri)
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }
-                val chooser = Intent.createChooser(intent, chooserTitle).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }
-                context.startActivity(chooser)
-            } catch (e: Exception) {
-                e.printStackTrace()
-                showToast(context, "Share error: ${e.localizedMessage ?: "Unknown"}")
-            }
+            QRFileExportManager.shareFileSafely(
+                context = context,
+                file = file,
+                mimeType = mimeType,
+                chooserTitle = chooserTitle,
+                extraText = extraText,
+                extraSubject = extraSubject
+            )
         }
     }
 
@@ -415,7 +400,12 @@ class MainViewModel(
         val bitmap = _previewBitmap.value ?: return
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val file = saveBitmapToCache(context, bitmap, "qraft_share_${System.currentTimeMillis()}.png")
+                val file = QRFileExportManager.saveBitmapToCache(
+                    context = context,
+                    bitmap = bitmap,
+                    fileName = "qraft_share_${System.currentTimeMillis()}.png",
+                    format = Bitmap.CompressFormat.PNG
+                )
                 if (file != null) {
                     shareFileSafely(
                         context = context,
@@ -455,7 +445,12 @@ class MainViewModel(
                     null
                 } ?: _previewBitmap.value ?: return@launch
 
-                val file = saveBitmapToCache(context, exportBmp, "qraft_${System.currentTimeMillis()}.png", Bitmap.CompressFormat.PNG)
+                val file = QRFileExportManager.saveBitmapToCache(
+                    context = context,
+                    bitmap = exportBmp,
+                    fileName = "qraft_${System.currentTimeMillis()}.png",
+                    format = Bitmap.CompressFormat.PNG
+                )
                 if (file != null) {
                     shareFileSafely(
                         context = context,
@@ -490,7 +485,13 @@ class MainViewModel(
                     null
                 } ?: _previewBitmap.value ?: return@launch
 
-                val file = saveBitmapToCache(context, exportBmp, "qraft_${System.currentTimeMillis()}.jpg", Bitmap.CompressFormat.JPEG)
+                val file = QRFileExportManager.saveBitmapToCache(
+                    context = context,
+                    bitmap = exportBmp,
+                    fileName = "qraft_${System.currentTimeMillis()}.jpg",
+                    format = Bitmap.CompressFormat.JPEG,
+                    quality = 95
+                )
                 if (file != null) {
                     shareFileSafely(
                         context = context,
@@ -515,15 +516,20 @@ class MainViewModel(
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 val svgStr = QRSvgExporter.generateSvgString(payload, _qrStyle.value)
-                val file = File(context.cacheDir, "qraft_${System.currentTimeMillis()}.svg")
-                file.writeText(svgStr)
-                shareFileSafely(
+                val file = QRFileExportManager.saveTextToCache(
                     context = context,
-                    file = file,
-                    mimeType = "image/svg+xml",
-                    chooserTitle = "Export SVG Vector"
+                    text = svgStr,
+                    fileName = "qraft_${System.currentTimeMillis()}.svg"
                 )
-                recordGeneration()
+                if (file != null) {
+                    shareFileSafely(
+                        context = context,
+                        file = file,
+                        mimeType = "image/svg+xml",
+                        chooserTitle = "Export SVG Vector"
+                    )
+                    recordGeneration()
+                }
             } catch (e: Exception) {
                 e.printStackTrace()
                 withContext(Dispatchers.Main) {
@@ -673,24 +679,26 @@ class MainViewModel(
             root.put("history", array)
 
             val timestamp = System.currentTimeMillis()
-            val backupFile = File(context.cacheDir, "qraft_history_backup_${timestamp}.json")
-            backupFile.writeText(root.toString(2), Charsets.UTF_8)
+            val backupFile = QRFileExportManager.saveTextToCache(
+                context = context,
+                text = root.toString(2),
+                fileName = "qraft_history_backup_${timestamp}.json"
+            )
 
-            withContext(Dispatchers.Main) {
-                try {
-                    val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", backupFile)
-                    val intent = Intent(Intent.ACTION_SEND).apply {
-                        type = "application/json"
-                        putExtra(Intent.EXTRA_STREAM, uri)
-                        putExtra(Intent.EXTRA_SUBJECT, "QRaft History Backup (JSON)")
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    }
-                    val chooser = Intent.createChooser(intent, Strings.get("export_json_backup", _language.value))
-                    chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    context.startActivity(chooser)
+            if (backupFile != null) {
+                shareFileSafely(
+                    context = context,
+                    file = backupFile,
+                    mimeType = "application/json",
+                    chooserTitle = Strings.get("export_json_backup", _language.value),
+                    extraSubject = "QRaft History Backup (JSON)"
+                )
+                withContext(Dispatchers.Main) {
                     showToast(context, Strings.get("backup_export_success", _language.value))
-                } catch (e: Exception) {
-                    showToast(context, "Export error: ${e.localizedMessage}")
+                }
+            } else {
+                withContext(Dispatchers.Main) {
+                    showToast(context, "Failed to create JSON backup file")
                 }
             }
         }
@@ -851,25 +859,27 @@ class MainViewModel(
             }
             val csvData = CsvHistoryExporter.exportToCsv(items)
             val timestamp = System.currentTimeMillis()
-            val file = File(context.cacheDir, "qraft_history_${timestamp}.csv")
-            file.writeText(csvData, Charsets.UTF_8)
+            val file = QRFileExportManager.saveTextToCache(
+                context = context,
+                text = csvData,
+                fileName = "qraft_history_${timestamp}.csv"
+            )
 
-            withContext(Dispatchers.Main) {
-                try {
-                    val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
-                    val intent = Intent(Intent.ACTION_SEND).apply {
-                        type = "text/csv"
-                        putExtra(Intent.EXTRA_STREAM, uri)
-                        putExtra(Intent.EXTRA_SUBJECT, "QRaft History Export (CSV)")
-                        putExtra(Intent.EXTRA_TEXT, "Exported QR History from QRaft Studio (${items.size} records)")
-                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                    }
-                    val chooser = Intent.createChooser(intent, Strings.get("export_csv", _language.value))
-                    chooser.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    context.startActivity(chooser)
+            if (file != null) {
+                shareFileSafely(
+                    context = context,
+                    file = file,
+                    mimeType = "text/csv",
+                    chooserTitle = Strings.get("export_csv", _language.value),
+                    extraText = "Exported QR History from QRaft Studio (${items.size} records)",
+                    extraSubject = "QRaft History Export (CSV)"
+                )
+                withContext(Dispatchers.Main) {
                     showToast(context, Strings.get("csv_export_success", _language.value))
-                } catch (e: Exception) {
-                    showToast(context, "Export error: ${e.localizedMessage}")
+                }
+            } else {
+                withContext(Dispatchers.Main) {
+                    showToast(context, "Failed to create CSV export file")
                 }
             }
         }
@@ -1373,7 +1383,13 @@ class MainViewModel(
     fun saveReconstructedImage(context: Context, bitmap: Bitmap) {
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val file = saveBitmapToCache(context, bitmap, "qraft_reconstructed_${System.currentTimeMillis()}.jpg")
+                val file = QRFileExportManager.saveBitmapToCache(
+                    context = context,
+                    bitmap = bitmap,
+                    fileName = "qraft_reconstructed_${System.currentTimeMillis()}.jpg",
+                    format = Bitmap.CompressFormat.JPEG,
+                    quality = 95
+                )
                 if (file != null) {
                     shareFileSafely(
                         context = context,
@@ -1402,17 +1418,7 @@ class MainViewModel(
         fileName: String,
         format: Bitmap.CompressFormat = Bitmap.CompressFormat.PNG
     ): File? {
-        return try {
-            val file = File(context.cacheDir, fileName)
-            val fos = FileOutputStream(file)
-            bitmap.compress(format, 100, fos)
-            fos.flush()
-            fos.close()
-            file
-        } catch (e: Exception) {
-            e.printStackTrace()
-            null
-        }
+        return QRFileExportManager.saveBitmapToCache(context, bitmap, fileName, format)
     }
 
     private fun showToast(context: Context, msg: String) {

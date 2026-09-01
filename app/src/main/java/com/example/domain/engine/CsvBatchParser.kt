@@ -213,7 +213,8 @@ geo:37.7749,-122.4194
             mkdirs()
         }
 
-        val zipFile = File(context.cacheDir, "qraft_batch_${sessionId}.zip")
+        val exportDir = QRFileExportManager.getExportCacheDir(context)
+        val zipFile = File(exportDir, "qraft_batch_${sessionId}.zip")
         val zos = ZipOutputStream(FileOutputStream(zipFile))
         var successCount = 0
 
